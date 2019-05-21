@@ -301,3 +301,37 @@ Message
 
 
 
+##  线程池
+
+### 1. 等待所有线程结束
+
+```python
+# -*- coding: UTF-8 -*-
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
+
+# 模拟获取网页
+def get_html(times):
+    time.sleep(times)
+    print(f'get page {times}s finish.')
+    return times
+
+
+def test_thread_pool():
+    executor = ThreadPoolExecutor(max_workers=2)
+    urls = [3, 2, 4, 6, 7, 8]  # 模拟数据
+    i = 0
+    all_task = [executor.submit(get_html, (url)) for url in urls]
+
+    for future in as_completed(all_task):
+        data = future.result()
+        print("in main: get page {}s success".format(data))
+
+
+if __name__ == '__main__':
+    test_thread_pool()
+```
+
+<font color=red>as_completed()</font>方法是一个生成器，在没有任务完成的时候，会阻塞，在有某个任务完成的时候，会<font color=red>yield</font>这个任务，就能执行for循环下面的语句，然后继续阻塞住，循环到所有的任务结束。从结果也可以看出，**先完成的任务会先通知主线程**。
+
