@@ -335,3 +335,177 @@ if __name__ == '__main__':
 
 <font color=red>as_completed()</font>方法是一个生成器，在没有任务完成的时候，会阻塞，在有某个任务完成的时候，会<font color=red>yield</font>这个任务，就能执行for循环下面的语句，然后继续阻塞住，循环到所有的任务结束。从结果也可以看出，**先完成的任务会先通知主线程**。
 
+
+
+## Paramiko(ssh2协议的实现库)
+
+概念:
+
+* SSHClient
+* Transport
+* start_server
+* start_client
+* channels
+
+
+
+
+
+## 用法：
+
+### typing 类型标注
+
+#### Callable
+
+ `Callable[[Arg1Type, Arg2Type], ReturnType]`
+
+
+
+
+
+### 导入系统库（当前代码与系统的包名冲突时）
+
+```
+from __future__ import 
+```
+
+
+
+### 在多线程中，利用队列传递对象,对象是同一个吗？
+
+思考：在c++中将对象存入到队列中，存的是一个拷贝，在python中存的是对象本身（通过打印地址得知），在两个线程（线程A和线程B）中，两个线程通过队列通讯，在线程A产生对象并通过队列传递给线程B，通过打印对象的地址得知，两个对象是同一个。
+
+测试代码:
+
+```python
+import time
+from threading import Thread
+from queue import Queue
+
+class Result:
+    def __init__(self, 
+            flag, pos, 
+            end_pos,total, 
+            percent,status):
+        self.flag = flag
+        self.pos = pos
+        self.count = 0
+        self.total = total
+        self.percent = percent
+        self.status = status
+
+    def update_progress(self, pos, step):
+        self.pos = pos
+        self.count += step
+
+    def progress(self):
+        return self.count / self.total
+
+    def info(self):
+        ret = "flag:{flag} pos:{pos} "\
+              "total:{total} percent:"\
+              "{percent} status:{status}".format(
+                      flag=self.flag, pos=self.pos,
+                      total=self.total, percent=self.percent,
+                      status=self.status)
+        return ret
+
+
+class Cook:
+    def __init__(self):
+        self.stopped = False
+        self.data_q = None
+        self.result_q = None
+
+    def run(self, data_q, result_q):
+        self.data_q = data_q
+        self.result_q = result_q
+        while not self.stopped:
+            #print('running')
+            item = self.data_q.get()
+            print(f"cook: flag{item.flag} {item}")
+            time.sleep(1)
+        print('cook quit...')
+
+    def cook_data(self):
+        pass
+
+    def save_result(self):
+        pass
+
+    def stop(self):
+        self.stopped = True
+
+class Make():
+    def __init__(self):
+        self.stopped = False
+        self.data_q = None
+        self.result_q = None
+
+    def run(self, data_q, result_q):
+        self.data_q = data_q
+        self.result_q = result_q
+        i = 0
+        while not self.stopped:
+            flag = 'task_' + str(i)
+            pos = 0
+            count = 0
+            total = 100
+            status = 0
+            end_pos = 100
+            percent = 0
+            r = Result(flag=flag, pos=pos, 
+                     end_pos=end_pos,
+                     total=total, 
+                     percent=percent,
+                     status=status)
+            print(f"make:{r.flag} address:{r}")
+            self.data_q.put(r)
+            time.sleep(10)
+            i += 1
+        print('make quit...')
+
+    def stop(self):
+        self.stopped = True
+
+
+
+if __name__ == '__main__':
+    data_q = Queue()
+    result_q = Queue()
+    
+    # 线程B：获取数据
+    cook = Cook()
+    t = Thread(target=cook.run, 
+            args=(data_q, result_q))
+    t.start()
+    
+    # 线程A：产生数据
+    make = Make()
+    t2 = Thread(target=make.run, 
+            args=(data_q, result_q))
+    t2.start()
+
+    t.join()
+    t2.join()
+```
+
+运行结果:
+
+```
+make:task_0 address:<Result.Result object at 0x0000000002B3CE10>
+cook: flagtask_0 <Result.Result object at 0x0000000002B3CE10>
+make:task_1 address:<Result.Result object at 0x0000000002B3CE80>
+cook: flagtask_1 <Result.Result object at 0x0000000002B3CE80>
+```
+
+
+
+
+
+
+
+
+
+
+
