@@ -503,6 +503,51 @@ cook: flagtask_1 <Result.Result object at 0x0000000002B3CE80>
 
 
 
+### 回调函数
+
+参考博客：<https://www.cnblogs.com/surehunter/p/7896298.html>
+
+**需要回调函数的场景：** 进程池中任何一个任务一旦处理完了，就立即告知主进程：我好了额，你可以处理我的结果了。主进程则调用一个函数去处理该结果，该函数即回调函数
+
+我们可以把耗时间（阻塞）的任务放到进程池中，然后指定回调函数（主进程负责执行），这样主进程在执行回调函数时就省去了I/O的过程，直接拿到的是任务的结果。
+
+```python
+from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
+import requests
+import os
+import time
+
+def get(url):
+    print('%s GET %s' %(os.getpid(),url))
+    response=requests.get(url)
+    if response.status_code == 200:
+        return {'url':url,'text':response.text}
+
+def parse(res):
+    res=res.result()
+    url=res['url']
+    text=res['text']
+    print('%s parse %s res:%s' %(os.getpid(),url,len(text)))
+
+if __name__ == '__main__':
+    urls = [
+        'https://www.baidu.com',
+        'https://www.python.org',
+        'https://www.openstack.org',
+        'https://help.github.com/',
+        'http://www.sina.com.cn/'
+    ]
+
+    p=ProcessPoolExecutor()
+    start=time.time()
+    for url in urls:
+        future=p.submit(get, url)
+        future.add_done_callback(parse) #parse(futrue)
+    p.shutdown(wait=True)
+    print(time.time()-start) #3.1761815547943115
+    print(os.getpid())
+```
+
 
 
 
