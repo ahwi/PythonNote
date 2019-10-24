@@ -552,5 +552,18 @@ if __name__ == '__main__':
 
 
 
+## 将py文件编译成exe
+
+```
+# 1. 安装pyinstaller:
+	python3 -m pip install pyinstaller
+# 2. 切换到代码路径下，运行命令:
+$ pyinstaller -F xxx.py(xxx.py, 打包的文件)
+
+# 3. 打包成功后新增一个dist文件，里面会有编译好的exe
+```
+
+
+
 
 
