@@ -50,7 +50,11 @@ db.school.aggregate([{$match:{sex:"男"}}, {$group:{_id:"$class"}}])
 
 
 
+## 相关阅读
 
+博客
+
+https://www.mongodb.com/blog/post/getting-started-with-python-and-mongodb
 
 
 
