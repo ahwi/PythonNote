@@ -84,12 +84,21 @@ TODO
 
 <https://www.rabbitmq.com/getstarted.html>
 
+### 0. 简介
+
+**rabbitMQ:** message broker（消息代理） --> 用来接收并转发消息 
+
+概念:
+
+* Producer：发送消息的程序
+* queue：
+  * 存储消息的盒子，消息流经rabbitmq和应用程序，但是只能存储在队列中。
+  * 多个生产者可以发送到同一个队列，多个消费者也可以从队列中取消息
+* consumer: 消息接收者
+
+producer、consumer、broker不需要再同一台主机上面
+
 ### 1. hello world
-
-* Producer
-
-* queue
-* consumer
 
 #### 1. 使用pika python客户端
 
@@ -103,34 +112,41 @@ python -m pip install pika
 
 ​	![1574844441637](assets/1574844441637.png)
 
-send.py:
+send.py: 发送一个"hello"字符串到队列中
 
 ```python
 import pika
 
+# 1. 跟rabbitMQ建立连接
 connection = pika.BlockingConnection(
         pika.ConnectionParameters('localhost'))
 channel = connection.channel()
+# 2. 确保消息队列存在 注:如果消息队列不存在，rabbitMQ只是简单的将消息丢弃
 channel.queue_declare(queue='hello')
+# 3. 消息需要通过exchange才能到达队列，传递空字符串可以使用默认的exchange
 channel.basic_publish(
         exchange='',
         routing_key='hello',
         body='Hello World!'
         )
 print("[x] Sent 'Hello World!'")
+# 4. 在退出程序之前，需要确保网络缓冲区已经刷新并且我们的消息已经投递到rabbitMQ中，这可以通过简单的关闭连接来实现
 connection.close()
 ```
 
-receive.py
+receive.py：从队列中接收消息并打印到屏幕
 
 ```python
 import pika
 
+# 1. 跟rabbitMQ建立连接
 connection = pika.BlockingConnection(
         pika.ConnectionParameters('localhost'))
 channel = connection.channel()
+# 2. 确保消息队列存在。不管执行多少次，队列只会被创建一次
 channel.queue_declare(queue='hello')
 
+# 3. 定义回调函数
 def callback(ch, method, properties, body):
     print(" [x] Received %r" % body)
 
@@ -139,6 +155,7 @@ channel.basic_consume(queue='hello',
                       on_message_callback=callback)
 
 print(' [*] Waiting for messages. To exit press CTRL+C')
+# 开始循环等待消息的到来
 channel.start_consuming()
 ```
 
@@ -163,5 +180,7 @@ $ rabbitmqctl.bat list_queues
 
 
 
+### 问题
 
+1. topic 如果客户端（接收消息的程序）不存在，发送的消息会被简单的丢弃，发送端怎么确认消息是否被发送
 

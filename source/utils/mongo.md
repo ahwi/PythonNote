@@ -56,7 +56,9 @@ db.school.aggregate([{$match:{sex:"男"}}, {$group:{_id:"$class"}}])
 
 https://www.mongodb.com/blog/post/getting-started-with-python-and-mongodb
 
+多线程连接的相关问题:
 
+<https://juejin.im/post/5a3b1e9c51882515945abedf>
 
 
 
