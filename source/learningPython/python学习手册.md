@@ -281,6 +281,76 @@ F(99)
 
 
 
+#### 编写函数装饰器
+
+##### 跟踪调用
+
+需要统计一个函数被调用的次数，并且针对每次调用打印跟踪信息，下面有两种解决方案：
+
+* 使用函数装饰器的方式
+
+  ```python
+  class tracer1:
+      def __init__(self, func):
+          self.calls = 0
+          self.func = func
+  
+      def __call__(self, *args):
+          self.calls += 1
+          print("call %s to %s" % (self.calls, self.func.__name__))
+          self.func(*args)
+  
+  
+  @tracer1
+  def spam(a, b, c):
+      print(a + b + c)
+  def main():
+      # spam(1, 2, 3)
+      # spam(1, 2, 3)
+      # spam(1, 2, 3)
+  
+  if __name__ == "__main__":
+      main()
+  
+  ```
+
+* 使用普通函数调用的方式
+
+  ```python
+  calls = 0
+  def tracer(func, *args):
+      global calls
+      calls += 1 
+      print("call %s to %s" % (calls, func.__name__))
+      func(*args)
+  
+  def spam2(a, b, c):
+      print(a + b + c)
+      
+  def main():
+      tracer(spam2, 1, 2, 3)
+      tracer(spam2, 1, 2, 3)
+      tracer(spam2, 1, 2, 3)
+  
+  if __name__ == "__main__":
+      main()
+  
+  ```
+
+两者对比装饰器版本在调用的时候不需要额外的语法，而且意图比较明显
+
+##### 装饰器状态保持方案 
+
+##### 类错误一：对方法进行装饰
+
+##### 对调用计时
+
+##### 添加装饰器参数
+
+
+
+#### 编写类装饰器
+
 
 
 

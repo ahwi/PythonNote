@@ -94,11 +94,28 @@ def add_object():
     for name in session.query(User.name).filter(User.fullname=='Ed Jones'):
         print(name)
 
-    # query 对象完全生成:大多数方法调用返回一个新的Query对象
-    for user in session.query(User).\
-            filter(User.name == 'ed').\
-            filter(User.fullname == "Ed Jones"):
-        print(user)
+    # # query 对象完全生成:大多数方法调用返回一个新的Query对象
+    # for user in session.query(User).\
+    #         filter(User.name == 'ed').\
+    #         filter(User.fullname == "Ed Jones"):
+    #     print(user)
+
+    # 返回列表和标量
+    query = session.query(User).filter(User.name.like('%ed')).order_by(User.id)
+    print(query.all())
+    print(query.first())
+    # one:找到多行引发错误
+    # print(query.one())
+    # one:没找到引发错误
+    # user = query.filter(User.id == 99).one()
+    # print(user)
+    # one_or_none
+    user = query.filter(User.id == 99).one_or_none()
+    print(user)
+
+    # scalar
+    query = session.query(User.id).filter(User.name.like('ed')).order_by(User.id)
+    print(query.scalar())
 
 
 class Student:
