@@ -4,7 +4,8 @@ import time
 connection = pika.BlockingConnection(
         pika.ConnectionParameters('localhost'))
 channel = connection.channel()
-channel.queue_declare(queue='task_queue')
+# durable: 声明队列为持久化队列
+channel.queue_declare(queue='task_queue', durable=True)
 
 def callback(ch, method, properties, body):
     print(" [x] Received %r" % body)

@@ -178,8 +178,108 @@ $ rabbitmqctl.bat list_queues
 
 
 
+#### Message durability( 消息持久)
+
+<font color=red>消息持久化:</font>可以确保在RabbitMQ退出或者崩溃的时候不会丢失消息。
+
+消息持久化需要两个步骤:
+
+* 标记队列为持久化
+
+  ```python
+  channel.queue_declare(queue='task_queue', durable=True)
+  ```
+
+* 标记消息为持久化
+
+  ```python
+  channel.basic_publish(exchange='',
+                        routing_key="task_queue",
+                        body=message,
+                        properties=pika.BasicProperties(
+                           delivery_mode = 2, # make message persistent
+                        ))
+  ```
+
+<font color=red>rabbitmq不允许重新修改已经存在的队列的参数，如果你标记一个已经存在的队列为持久化会不起作用。</font>
+
+`注：消息持久化还是不能确保消息百分之百不会丢失，存在一个时间窗口会导致消息丢失：rabbitmq已经接收消息但是还没有保存的硬盘上，如果你需要更强大的保证数据不会丢失可以使用publisher confirms <https://www.rabbitmq.com/confirms.html>`
+
+#### Fail dispatch(公平派遣)
+
+rabbitmq默认的分配方式会导致一个问题：如果有些任务很耗时，另一些任务很快能完成，就会导致有些worker需要等待其他worker完成任务才能接收到下一个任务。因为rabbitmq任务分配时轮询分配的，它只是盲目地将每第n条消息发送给第n个使用者。
+
+可以使用`prefetch_count=1`的设置，让rabbitmq在worker处理完任务并且返回确认消息的时候才分配新的任务。
+
+<font color=red>queue的大小：</font>
+
+有一点你需要注意，如果所有的worker都在忙，你的队列就满了。也许可以通过增加队列或者message TTL<https://www.rabbitmq.com/ttl.html>来解决。
+
+#### 代码:
+
+new_task.py
+
+```python
+import pika
+import sys
+
+
+connection = pika.BlockingConnection(
+        pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+# durable: 声明队列为持久化队列
+channel.queue_declare(queue='task_queue', durable=True)
+
+message = ' '.join(sys.argv[1:]) or "Hello World"
+channel.basic_publish(
+        exchange='',
+        routing_key='task_queue',
+        body=message,
+        # delivery_mode=2: 将消息设置为持久化消息
+        properties=pika.BasicProperties(
+            delivery_mode=2,)  # make message persistent
+        )
+print("[x] Sent 'Hello World!'")
+connection.close()
+
+```
+
+worker.py
+
+```python
+#!/usr/bin/env python
+import pika
+import time
+
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(host='localhost'))
+channel = connection.channel()
+
+channel.queue_declare(queue='task_queue', durable=True)
+print(' [*] Waiting for messages. To exit press CTRL+C')
+
+
+def callback(ch, method, properties, body):
+    print(" [x] Received %r" % body)
+    time.sleep(body.count(b'.'))
+    print(" [x] Done")
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
+channel.basic_qos(prefetch_count=1)
+channel.basic_consume(queue='task_queue', on_message_callback=callback)
+
+channel.start_consuming()
+```
+
+
+
+
 
 ### 3. Publish/Subscribe
+
+**简介:**声明一个exchange, 生产者将消息推送到exchange，由exchange将消息推送到对应的queue中。
 
 **功能:** 一条消息发送给多个消费者。发布/订阅模式
 
@@ -289,7 +389,7 @@ connection.close()
 
 在建立连接之后，我们声明了一个exchange，这步是必须的，推送给一个不存在的exchange是被禁止的行为。
 
-<font color=red>如果没有队列绑定到exchange中，消息将会被丢弃。</font>不过对于我们这个例程来说，这种情况是被接收的。
+<font color=red>如果没有队列绑定到exchange中，消息将会被丢弃。</font>不过对于我们这个例程来说，这种情况是被接受的。
 
 recieve_log.py
 
@@ -325,6 +425,8 @@ channel.start_consuming()
 
 ### 4. routing
 
+**简介：**声明一个direct类型的exchange，绑定exhange和queue的关系，并用routing_key参数来指明对queue对来自exchange哪一类型的数据感兴趣。
+
 上一个例程是把所有的日志消息都发送给每个队列，本例程添加一个特性：只接收特定的日志消息，如：只把critical error的日志记录的日志文件，而把所有的日志打印到控制台
 
 #### Bindings绑定
@@ -337,7 +439,7 @@ channel.queue_bind(exchange=exchange_name, queue=queue_name)
 
 绑定指定了exchange和queue之间的关系，简单的理解为:队列对来自exchange的消息感兴趣。
 
-可以通过routing_key来指定队列对来自exchange某一类型的消息感兴趣。routing_key的作用取决于exchange type。如果是fanout类型的exchanges，之间忽略routing_key的值。
+可以通过routing_key来指定队列对来自exchange某一类型的消息感兴趣。routing_key的作用取决于exchange type。如果是fanout类型的exchanges，则忽略routing_key的值。
 
 ```python
 channel.queue_bind(exchange=exchange_name,
@@ -401,8 +503,10 @@ connection = pika.BlockingConnection(
     pika.ConnectionParameters(host='localhost'))
 channel = connection.channel()
 
+# 声明一个direct类型的exchang
 channel.exchange_declare(exchange='direct_logs', exchange_type='direct')
 
+# 声明一个队列
 result = channel.queue_declare(queue='', exclusive=True)
 queue_name = result.method.queue
 
@@ -431,7 +535,7 @@ channel.start_consuming()
 
 
 
-### Topics
+### 5. Topics
 
 在我们的日志系统中，不仅要根据日志的验证等级来订阅日志，也要根据日志的来源来订阅日志。这个时候就需要使用到topic类型的exchange
 
@@ -448,7 +552,7 @@ binding_key必须也是相同的格式，和direct类型的exchange一样，会�
 
 ![1577515358029](assets/1577515358029.png)
 
-### RPC
+### 6. RPC
 
 希望实现调用远程服务器的一个函数并且返回结果。这个特性通常称为远程调用(Remote Procedure Call or RPC)。
 
@@ -478,5 +582,27 @@ print("fib(4) is %r" % result)
 
 
 
+## MQ消息中间件 RabbitMQ 入门到进阶（牧马人/老王 视频学习）
 
+### 课程大纲
+
+1. 消息队列解决了什么问题:
+   * 异步处理
+   * 应用解耦
+   * 流浪削锋
+   * 日志处理
+2. rabbitmq安装与配置
+3. JAVA操作rabbitmq
+   1. simple 简单队列
+   2. work queue 工作队列 公平分发 轮询方法
+   3. publish/subscribe 发布订阅
+   4. routing 路由选择 通配符模式
+   5. Topics 主题
+   6. 手动和自动确认消息
+   7. 队列的持久化和非持久化
+   8. rabbitmq的延迟队列
+4. Spring AMQP Spring-Rabbit
+5. 场景demo MQ实现搜索引擎DIH增量
+6. 场景demo 未支付订单30分钟取消
+7. 大数据应用 类似百度统计 cnzz架构 消息队列
 

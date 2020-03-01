@@ -351,6 +351,264 @@ F(99)
 
 #### 编写类装饰器
 
+类装饰器可以用来管理类自身，或者用来拦截实例创建调用以管理实例。
+
+
+
+##### 单例类
+
+由于类装饰器可以用来拦截实例创建调用，因此可以用来管理一个类的所有实例。
+
+如下实现了单例编程模式：它限制每个类只有一个单独的实例
+
+```python
+instances = {}
+
+def singleton(aClass):
+    def onCall(*args, **kwargs):
+        if aClass not in instances:
+            instances[aClass] = aClass(*args, **kwargs)
+        return instances[aClass]
+    return onCall
+
+
+@singleton
+class Person:
+    def __init__(self, name, hours, rate):
+        self.name = name
+        self.hours = hours
+        self.rate = rate
+
+    def pay(self):
+        return self.hours * self.rate
+
+@singleton
+class Spam:
+    def __init__(self, val):
+        self.attr = val
+
+def main():
+    bob = Person('Bob', 40, 10)
+    print(bob.name, bob.pay())
+    sue = Person('Sue', 50, 20)
+    print(sue.name, sue.pay())
+
+    x = Spam(val=42)
+    y = Spam(99)
+    print(x.attr, y.attr)
+
+        
+if __name__ == "__main__":
+    main()
+```
+
+**编写替代方案：**
+
+前面是使用全局变量的方式，下面分别用nonlocal语句、函数属性和类的方式各编写了一个版本：
+
+```python
+# ===========使用nonlocal方式=========
+def singleton2(aClass):
+    instance = None
+    def onCall(*args, **kwargs):
+        nonlocal instance
+        if instance == None:
+            instances = aClass(*args, **kwargs)
+        return instances
+    return onCall
+
+# ============使用函数属性==================
+def singleton3(aClass):
+    def onCall(*args, **kwargs):
+        if onCall.instances == None:
+            onCall.instances = aClass(*args, **kwargs)
+        return onCall.instances
+    onCall.instance = None
+    return onCall
+
+
+# =============使用类编写===============
+class singleton4:
+    def __init__(self, aClass):
+        self.aClass = aClass
+        self.instance = None
+
+    def __call__(self, *args, **kwargs):
+        if self.instance == None:
+            self.instance = self.aClass(*args, **kwargs)
+        return self.instance
+```
+
+
+
+##### 跟踪对象接口
+
+另一个应用场景：为每个生成的实例扩展接口，以某种方式管理接口的访问
+
+
+
+
+
+##### 类错误二：保持多个实例
+
+##### 装饰器vs管理器函数
+
+##### 为什么使用装饰器（回顾）
+
+
+
+
+
+#### 直接管理函数和类
+
+#### 示例： “私有”和“公有”属性
+
+##### 实现私有属性
+
+##### 实现细节一
+
+##### 公有声明的推广
+
+##### 实现细节二
+
+##### 开发问题
+
+##### python不是关于控制
+
+
+
+### 第40章 元类
+
+元类 --> 扩展装饰器的代码插入模型
+
+* 装饰器 --> 扩展函数调用、类实例创建调用
+
+* 元类 --> 扩展类的创建
+
+区别:
+
+* 元类装饰器 --> 在被装饰类创建完成之后运行 --> 通常用来：添加在实例创建的时候运行的逻辑
+
+* 元类 --> 在类创建过程中就运行了的 --> 通常用来:管理或扩展类
+
+示例：
+
+​	声明一个元类，告诉python把类对象的创建路由到我们所提供的另外一个类
+
+```python
+def extra(self, arg):...
+
+class Extras(type):
+    def __init__(Class, classname, superclasses, attributedict):
+        if required():
+            Class.extra = extra
+
+class Client1(metaclass=Extras):...
+class Client2(metaclass=Extras):...
+class Client3(metaclass=Extras):...
+
+x = Client1()
+x.extra()
+```
+
+#### 声明元类
+
+* 在python3中的声明
+
+  ```python
+  class Spam(metaclass=Meta)
+  
+  class Spam(Eggs, metaclass=Meta)
+  ```
+
+* 在python2中的声明
+
+  ```python
+  class Spam(object):
+  	__metaclass__ = Meta
+  
+  class Spam(Eggs, object):
+      __metaclass__ = Meta
+  ```
+
+#### 编写元类
+
+元类 --> 用常规的python class 语句和语法编写 --> 唯一的实质区别: 必须遵循type父类所预期的接口
+
+##### 其他元类编程技巧
+
+###### 使用简单的工厂函数
+
+元类并不需要是一个类 --> 如何可调用对象都可用作为元类
+
+如一个简单的对象工程函数
+
+```python
+def MetaFunc(classname, supers, classdict):
+    print('In MetaOne.new:',  classname, supers, classdict, sep='\n...')
+    return type(classname, supers, classdict)
+
+
+class Eggs:
+    pass
+
+
+print("making class")
+class Spam(Eggs, metaclass=MetaFunc):
+    data = 1
+    def meth(self, arg):
+        return self.data + arg
+
+print("making instance")
+x = Spam()
+print("data:", x.data, x.meth(2))
+```
+
+MetaFunc函数 --> 捕获了通常由type对象的\___call\_默认拦截的调用
+
+###### 用普通类重载类创建调用
+
+ 普通类重载\__call\__方法 --> 扮演元类
+
+```python
+class MetaObj:
+    def __call__(self, classname, supers, classdict):
+        print('In MetaOne.new:',  classname, supers, classdict, sep='\n...')
+        Class = self.__New__(classname, supers, classdict)
+        self.__Init__(Class, classname, supers, classdict)
+        return Class
+
+    def __New__(self, classname, supers, classdict):
+        print('In MetaOne.new:', classname, supers, classdict, sep='\n...')
+        return type(classname, supers, classdict)
+
+    def __Init__(self, Class, classname, supers, classdict):
+        print("In MetaTwo init:",  classname, supers, classdict, sep='\n...')
+        print("...init class object:", list(Class.__dict__.keys()))
+
+class Eggs:
+    pass
+
+print("making class")
+class Spam(Eggs, metaclass=MetaObj()):
+    data = 1
+    def meth(self, arg):
+        return self.data + arg
+
+print("making instance")
+x = Spam()
+print("data:", x.data, x.meth(2))
+```
+
+
+
+###### 用元类重载类创建调用
+
+看不太懂，先略过
+
+#### 继承与实例
+
+
 
 
 
