@@ -177,6 +177,39 @@ $ rabbitmqctl.bat list_queues
 在这一部分中，我们将创建一个工作队列，该队列将用于在多个工作人员之间分配耗时的任务
 
 
+工作队列（又名：任务队列）的主要思想是: 避免那些不得不等待它完成，而且需要立即执行任务的情况。解决方法：把任务安排在以后完成。 将任务封装为消息并将其发送到工作队列，在后台运行的工作进程将取出任务并执行任务。 多个工作进程会共享这些任务。
+
+#### Round-robin dispatching（循环调度）
+
+默认情况下，RabbitMQ将按顺序将每个消息发送给下一个使用者。 平均而言，每个消费者都会收到相同数量的消息。 这种分发消息的方式称为循环(Round-robin)。
+
+#### Message acknowledgment(消息确认)
+
+RabbitMQ支持消息确认，如果一个consumer挂掉（channel关闭、connection关闭、TCP连接丢失），而且没有返回确认，rabbitmq会重新任务加到工作队列中。返回确认没有超时的时间，只有在consumer挂掉的时候才会回收任务。
+
+使用消息确认: 
+
+- 去掉`auto_ack=True`标识
+
+- 在消息回调中调用 ：
+
+  `ch.basic_ack(delivery_tag = method.delivery_tag)`
+
+注：
+
+消息确认必须通过同一个channel返回，不然会引起channel-level protocol的异常
+
+**忘记返回消息确认:**
+
+忘记返回消息确认会导致在consumer退出的时候，回收未确认的任务。而且未确认的任务越多，会导致rabbitmq占据的内存越多。
+
+可以通过打印未确认的消息来排查有没有这个bug：
+
+```cmd
+rabbitmqctl.bat list_queues name messages_ready messages_unacknowledged
+```
+
+
 
 #### Message durability( 消息持久)
 
@@ -605,4 +638,44 @@ print("fib(4) is %r" % result)
 5. 场景demo MQ实现搜索引擎DIH增量
 6. 场景demo 未支付订单30分钟取消
 7. 大数据应用 类似百度统计 cnzz架构 消息队列
+
+
+
+
+
+## pika -- 库的使用
+
+### 主要的核心类
+
+* connection adapter
+
+  用来连接RabbitMQ和管理连接
+
+  * BlockingConnection
+
+  * Select Connection Adapter
+
+    尝试对平台pika使用最佳轮询方法
+
+  * Tornado Connection Adapter
+
+  * Twisted Connection Adapter
+
+* connection parameters
+
+  用来指示connection对象如何连接到RabbitMQ
+
+* authentication credentials
+
+  用来封装ConnectionParameters类的所有验证消息
+
+* channel
+
+  通过AMQP RPC方法与RabbitMQ对象进行通信
+
+* exceptions
+
+  异常
+
+
 

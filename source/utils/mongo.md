@@ -71,7 +71,7 @@ C:\mongodb\bin\mongod.exe --remove
 **1. 新建Mongodb服务:**
 
 ```
-mongod --port 27017 --dbpath /data/db1
+mongod --port 27017 --dbpath c:\data\db
 ```
 
 **2. 开启mongodb客户端shell：**
