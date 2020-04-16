@@ -563,7 +563,20 @@ $ pyinstaller -F xxx.py(xxx.py, 打包的文件)
 # 3. 打包成功后新增一个dist文件，里面会有编译好的exe
 ```
 
+<font color=red>注：需要把一些\_\_file\_\_的东西注释掉，如：</font>
 
+```
+        #libpath = os.path.join(os.path.dirname(__file__), libname)
+        libpath = os.getcwd() + os.sep + libname
+```
 
+多进程代码需要多加:
 
+```
+if __name__=='__main__':
+	# 在此处添加 支持Pyinstaller3.3以上   Pyinstaller版本低于3.3版本的话，还需要额外添加一个模块（百度）
+	multiprocessing.freeze_support()
+	# 这里是你的代码
+	# ......
+```
 
