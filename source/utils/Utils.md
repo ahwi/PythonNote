@@ -322,7 +322,7 @@ def test_thread_pool():
     executor = ThreadPoolExecutor(max_workers=2)
     urls = [3, 2, 4, 6, 7, 8]  # 模拟数据
     i = 0
-    all_task = [executor.submit(get_html, (url)) for url in urls]
+    all_task = [executor.submit(get_html, (url,)) for url in urls]
 
     for future in as_completed(all_task):
         data = future.result()

@@ -398,6 +398,73 @@ localhost异常仅在MongoDB实例中没有创建用户的情况下适用。
 
 
 
+###### 添加用户
+
+* 总览
+* 先决条件
+* 例子
+* 用户名/密码认证
+* Kerberos身份验证
+* LDAP验证
+* x.509客户端证书认证 
+
+**1. 总览**
+
+MongoDB使用基于角色的访问控制（RBAC）来确定用户的访问权限。 授予用户一个或多个角色，这些角色确定用户对MongoDB资源的访问或特权以及用户可以执行的操作。 用户应仅具有确保系统具有最低特权所需的最小特权集。
+
+MongoDB系统的每个应用程序和用户都应映射到不同的用户。 这种访问隔离有助于访问撤消和持续的用户维护。
+
+**2. 先决条件**
+
+如果为部署启用了访问控制，则可以使用localhost异常在系统中创建第一个用户。 该第一个用户必须具有创建其他用户的特权。 从MongoDB 3.0开始，在localhost异常中，您只能在admin数据库上创建用户。 创建第一个用户后，必须以该用户身份进行身份验证后才能添加后续用户。" 启用访问控制（[Enable Access Control](https://docs.mongodb.com/manual/tutorial/enable-authentication/)）" -- 提供有关在部署启用访问控制时添加用户的更多详细信息。
+
+对于常规用户创建，您必须拥有以下权限：
+
+* 要在数据库中创建新用户，您必须对该数据库资源执行[`createUser`](https://docs.mongodb.com/manual/reference/privilege-actions/#createUser)操作([action](https://docs.mongodb.com/manual/reference/privilege-actions/#security-user-actions))。
+* 要向用户授予角色，您必须对角色的数据库执行[`grantRole`](https://docs.mongodb.com/manual/reference/privilege-actions/#grantRole)操作。
+
+[`userAdmin`](https://docs.mongodb.com/manual/reference/built-in-roles/#userAdmin) 和[`userAdminAnyDatabase`](https://docs.mongodb.com/manual/reference/built-in-roles/#userAdminAnyDatabase) 内置角色在其各自的资源上提供createUser和grantRole操作。
+
+**3. 例程**
+
+可以使用 [`db.createUser()`](https://docs.mongodb.com/manual/reference/method/db.createUser/#db.createUser)和[`createUser`](https://docs.mongodb.com/manual/reference/command/createUser/#dbcmd.createUser)命令来创建用户
+
+**3.1 用户名/密码认证**
+
+下面用来在reporting数据库中创建一个用户
+
+```
+use reporting
+db.createUser(
+  {
+    user: "reportsUser",
+    pwd: passwordPrompt(),  // or cleartext password
+    roles: [
+       { role: "read", db: "reporting" },
+       { role: "read", db: "products" },
+       { role: "read", db: "sales" },
+       { role: "readWrite", db: "accounts" }
+    ]
+  }
+)
+```
+
+
+
+**4. Kerberos身份验证**
+
+**5. LDAP验证**
+
+**6. x.509客户端证书认证**
+
+
+
+
+
+
+
+
+
 ## 相关阅读
 
 博客
