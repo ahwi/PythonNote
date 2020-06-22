@@ -1,5 +1,75 @@
 # Python3-Cookbook
 
+## 第四章：迭代器与生成器
+### 4.1 手动遍历迭代器
+不使用for循环而使用next()来手动遍历迭代器，`StopIteration`指示迭代器的结尾
+
+```python
+
+def manual_iter(filename):
+    with open(filename) as f:
+        try:
+            while True:
+                line = next(f)
+                print(line, end='')
+        except StopIteration:
+            pass
+
+
+def main():
+    filename = r""
+    manual_iter2(filename=filename)
+
+if __name__ == "__main__":
+    main()
+```
+
+
+
+### 4.2 代理迭代
+问题： 想要迭代自定义容器类，里面使用的是列表、元祖或其他可迭代对象作为容器，可以使用代理迭代。
+解决方法：定义一个`__iter__()`方法，将迭代操作代理到容器内部的对象上去，比如：
+```python
+class Node:
+    def __init__(self, value):
+        self._value = value
+        self._children = []
+
+    def __repr__(self):
+        return "Node({!r})".format(self._value)
+
+    def add_child(self, node):
+        self._children.append(node)
+
+    def __iter__(self):
+        return iter(self._children)
+
+
+
+def main():
+    root = Node(0)
+    child1 = Node(1)
+    child2 = Node(2)
+    root.add_child(child1)
+    root.add_child(child2)
+    for ch in root:
+        print(ch)
+
+if __name__ == "__main__":
+    main()
+```
+
+`__iter__()`只是简单的将迭代请求传递给内部的`_children`属性
+
+讨论:
+
+* python的迭代协议需要`__iter__()`方法返回一个实现了`__next__()`方法的迭代器对象。
+
+* `iter(s)`：调用`s.__iter__()`方法来返回对应的迭代器对象。
+
+
+
+
 
 
 ## 第六章：数据编码和处理
