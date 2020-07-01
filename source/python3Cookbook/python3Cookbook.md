@@ -153,8 +153,43 @@ if __name__ == "__main__":
 讨论:
 
 * python的迭代协议需要`__iter__()`方法返回一个实现了`__next__()`方法的迭代器对象。
-
 * `iter(s)`：调用`s.__iter__()`方法来返回对应的迭代器对象。
+
+
+
+## 4.3 使用生成器创建新的迭代模式
+
+**问题：**
+
+自定义迭代模式，类似内置函数`range()`，`reversed()`
+
+**解决方法:**
+
+使用生成器来实现自定义迭代模式
+
+下面是一个生产某个范围内浮点数的生成器：
+
+```python
+
+def frange(start, stop, increment):
+    x = start
+    while x < stop:
+        yield x
+        x += increment
+
+
+def main():
+    for n in frange(0, 4, 0.5):
+        print(n)
+
+
+if __name__ == '__main__':
+    main()
+```
+
+
+
+
 
 
 # 第六章：数据编码和处理
