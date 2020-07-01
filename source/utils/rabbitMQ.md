@@ -679,3 +679,11 @@ print("fib(4) is %r" % result)
 
 
 
+
+
+## 代理
+
+### haproxy和keeplived
+
+<https://zhuanlan.zhihu.com/p/125084805>
+
