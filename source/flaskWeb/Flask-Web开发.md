@@ -193,6 +193,32 @@ def index():
 
 
 
+**Flask扩展**
+
+Flask被设计为可扩展形式，如数据库和用户认证
+
+**1. 使用Flask-Script支持命令行选项**
+
+flask支持很多启动设置选项，但只能在脚本中作为参数传给`app.run()`函数，使用`Flask-Script`可以为flask添加一个命令行解析器的扩展。
+
+* 安装：
+
+  ```python
+  pip install flask-script
+  ```
+
+* 使用：
+
+  ```python
+  from flask.ext.script import Manager
+  manager = Manager(app)
+  
+  if __name__ == "__main__":
+      manager.run()
+  ```
+
+  为flask开发的扩展都暴露在flask.ext命名空间下，`Flask-Script`输出一个名为Manager的类。该扩展的初始化方法也适用于其他很多扩展：程序实例--(作为参数)-->构造函数-->初始化主类的实例-->在其他扩展中使用。
+
 ## 备注
 
 * flask是如何使用上下文在多线程的环境中，让某个变量成为某一线程的全局可访问变量
