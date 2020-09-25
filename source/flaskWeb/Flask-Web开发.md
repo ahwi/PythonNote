@@ -219,6 +219,179 @@ flask支持很多启动设置选项，但只能在脚本中作为参数传给`ap
 
   为flask开发的扩展都暴露在flask.ext命名空间下，`Flask-Script`输出一个名为Manager的类。该扩展的初始化方法也适用于其他很多扩展：程序实例--(作为参数)-->构造函数-->初始化主类的实例-->在其他扩展中使用。
 
+
+
+## 第3章 模板
+
+为了方便理解和维护，将视图函数的业务逻辑和表现逻辑分开，将表现逻辑移到模板中。
+
+为了渲染模板，Flask使用`Jinja2`模板引擎
+
+**Jinja2模板引擎**
+
+示例：
+
+```html
+<h1>Hello, {{name}}!</h1>
+```
+
+**1. 渲染模板**
+
+示例：
+
+```python
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template("index.html")
+
+@app.route('/user/<name>')
+def user(name):
+    return render_template("user.html", name=name)
+
+if __name__ == '__main__':
+    app.run()
+```
+
+* 默认情况下，Flask在templates子文件夹中寻找模板
+* Flask提供`render_template`函数把`Jinjia2`模板引擎集成到程序中
+
+**2. 变量**
+
+* 模板中使用的`{{ name }}`结构表示一个变量，告诉模板引擎这个位置的值从渲染模板时使用的数据中获取
+
+* Jinja2能失败列表、字典和对象等，如：
+
+  ```html
+  <p>A value from a dictionary: {{ mydict['key'] }}.</p>
+  <p>A value from a list: {{ mylist[3] }}.</p>
+  <p>A value from a list, with a variable index: {{ mylist[myintvar] }}.</p>
+  <p>A value from an object's method: {{ myobj.somemethod() }}.</p>
+  ```
+
+* 过滤器：用来修饰变量
+
+  如： `Hello, {{ name|capitalize }}`以首字母大写形式显示变量name的值
+
+  | 过滤器名   | 说　　明                                   |
+  | ---------- | ------------------------------------------ |
+  | safe       | 渲染值时不转义                             |
+  | capitalize | 把值的首字母转换成大写，其他字母转换成小写 |
+  | lower      | 把值转换成小写形式                         |
+  | upper      | 把值转换成大写形式                         |
+  | title      | 把值中每个单词的首字母都转换成大写         |
+  | trim       | 把值的首尾空格去掉                         |
+  | striptags  | 渲染之前把值中所有的 HTML 标签都删掉       |
+
+**3. 控制结构**
+
+Jinja2提供了多种控制结构，可用来改变模板的渲染流程
+
+* 条件控制语句
+
+  ```html
+  {% if user %}
+   Hello, {{ user }}!
+  {% else %}
+   Hello, Stranger!
+  {% endif %}
+  ```
+
+* 使用for循环渲染一组元素
+
+  ```html
+  <ul>
+   {% for comment in comments %}
+   <li>{{ comment }}</li>
+   {% endfor %}
+  </ul>
+  ```
+
+* 支持宏：
+
+  ```html
+  {% macro render_comment(comment) %}
+   <li>{{ comment }}</li>
+  {% endmacro %}
+  <ul>
+   {% for comment in comments %}
+   {{ render_comment(comment) }}
+   {% endfor %}
+  </ul>
+  ```
+
+* 在模板中导入宏
+
+  ```html
+  {% import 'macros.html' as macros %}
+  <ul>
+   {% for comment in comments %}
+   {{ macros.render_comment(comment) }}
+   {% endfor %}
+  </ul>
+  ```
+
+* 重复使用的代码单独封装，再引入：
+
+  ```html
+  {% include 'common.html' %}
+  ```
+
+* 继承：
+
+  base.html
+
+  ```html
+  <html>
+  <head>
+   {% block head %}
+   <title>{% block title %}{% endblock %} - My Application</title>
+   {% endblock %}
+  </head>
+  <body>
+   {% block body %}
+   {% endblock %}
+  </body>
+  </html>
+  ```
+
+  sub.html
+
+  ```html
+  {% extends "base.html" %}
+  {% block title %}Index{% endblock %}
+  {% block head %}
+   {{ super() }}
+   <style>
+   </style>
+  {% endblock %}
+  {% block body %}
+  <h1>Hello, World!</h1>
+  {% endblock %}
+  ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 备注
 
 * flask是如何使用上下文在多线程的环境中，让某个变量成为某一线程的全局可访问变量
