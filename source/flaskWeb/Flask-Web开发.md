@@ -373,10 +373,93 @@ Jinja2提供了多种控制结构，可用来改变模板的渲染流程
   {% endblock %}
   ```
 
+**使用Flask-Bootstrap集成Twitter Bootstrap**
 
+Bootstrap介绍:
 
+* Twitter开发的开源框架
 
+* 提供的用户界面组件可用于创建简洁且具有吸引力的网页，这些网页兼容所有现代Web浏览器
 
+* Boostrap是客户端框架，因此不会直接涉及服务器
+
+* 服务器需要做的只是提供引用了Bootstrap 层 叠 样 式 表（CSS） 和 JavaScript 文 件 的 HTML 响 应， 并 在 HTML、CSS 和JavaScript 代码中实例化所需组件。
+
+* 安装:
+
+  ```bash
+  python3 -m pip install flask-bootstrap
+  ```
+
+* 初始化方法：Flask扩展一般都在创建程序实例时初始化
+
+  ```python
+  from flask.ext.bootstrap import Bootstrap
+  # ...
+  bootstrap = Bootstrap(app)
+  ```
+
+* 使用：
+
+  在程序中使用一个包含所有Bootstrap文件的基模板，这个模板利用Jinja2的模板集成机制，让程序扩展一个具有基本页面结构的基模板，其中就有用来引入Bootstrap的元素。示例：把user.html改写为衍生模板后的新版本:
+
+  ```html
+  {% extends "bootstrap/base.html" %}
+  {% block title %}Flasky{% endblock %}
+  {% block navbar %}
+  <div class="navbar navbar-inverse" role="navigation">
+   <div class="container">
+   <div class="navbar-header">
+   <button type="button" class="navbar-toggle"
+   data-toggle="collapse" data-target=".navbar-collapse">
+   <span class="sr-only">Toggle navigation</span>
+   <span class="icon-bar"></span>
+   <span class="icon-bar"></span>
+   <span class="icon-bar"></span>
+   </button>
+   <a class="navbar-brand" href="/">Flasky</a>
+   </div>
+   <div class="navbar-collapse collapse">
+   <ul class="nav navbar-nav">
+   <li><a href="/">Home</a></li>
+   </ul>
+   </div>
+   </div>
+  </div>
+  {% endblock %}
+  {% block content %}
+  <div class="container">
+   <div class="page-header">
+   <h1>Hello, {{ name }}!</h1>
+   </div>
+  </div>
+  {% endblock %}
+  ```
+
+  * Jinja2 中的 extends 指令从 Flask-Bootstrap 中导入 bootstrap/base.html，从而实现模板继承。
+
+  * Flask-Bootstrap 中的基模板提供了一个网页框架，引入了 Bootstrap 中的所有 CSS 和JavaScript 文件。
+
+  * 基模板中定义了可在衍生模板中重定义的块。block 和 endblock 指令定义的块中的内容可添加到基模板中。
+
+  * 很多块都是 Flask-Bootstrap 自用的，如果直接重定义可能会导致一些问题。如果程序需要向已经有内容的块中添加新内容，必须使用 Jinja2 提供的 super() 函数。
+
+  * Flask-Bootstrap 的 base.html 模板还定义了很多其他块，都可在衍生模板中使用:
+
+    | 块　　名     | 说　　明                   |
+    | ------------ | -------------------------- |
+    | doc          | 整个 HTML 文档             |
+    | html_attribs | <html>标签的属性           |
+    | html         | <html>标签中的内容         |
+    | head         | <head>标签中的内容         |
+    | title        | <title>标签中的内容        |
+    | metas        | 一组<meta>标签             |
+    | styles       | 层叠样式表定义             |
+    | body_attribs | <body>标签的属性           |
+    | body         | <body>标签中的内容         |
+    | navbar       | 用户定义的导航条           |
+    | content      | 用户定义的页面内容         |
+    | scripts      | 文档底部的 JavaScript 声明 |
 
 
 
@@ -393,6 +476,12 @@ Jinja2提供了多种控制结构，可用来改变模板的渲染流程
 
 
 ## 备注
+
+* github链接地址:
+
+  ```
+  https://github.com/miguelgrinberg/flasky.git
+  ```
 
 * flask是如何使用上下文在多线程的环境中，让某个变量成为某一线程的全局可访问变量
 
