@@ -1043,6 +1043,157 @@ url_prefix参数 --> 蓝本中定义的路由都会加上指定前缀
 **2. 发送确认邮件**
 
 
+
+### 第9章 用户角色
+
+本章介绍用户角色的实现方式，赋予用户分立的角色，但角色使用权限定义
+
+#### 9.1 角色在数据库中的表示
+
+改进Role模型
+
+```python
+class Role(db.Model):
+ __tablename__ = 'roles'
+ id = db.Column(db.Integer, primary_key=True)
+ name = db.Column(db.String(64), unique=True)
+ default = db.Column(db.Boolean, default=False, index=True)
+ permissions = db.Column(db.Integer)
+ users = db.relationship('User', backref='role', lazy='dynamic')
+```
+
+添加两个字段：
+
+* default：默认角色的字段值为True
+
+* permissions: 权限，值是一个整数，各个操作都对应一个标志位
+
+  ![1603789360424](assets/1603789360424.png)
+
+在数据库中创建角色：
+
+```python
+class Role(db.Model):
+    # ...
+    @staticmethod
+    def insert_roles():
+        roles = {
+            'User': (Permission.FOLLOW |
+                     Permission.COMMENT |
+                     Permission.WRITE_ARTICLES, True),
+            'Moderator': (Permission.FOLLOW |
+                          Permission.COMMENT |
+                          Permission.WRITE_ARTICLES |
+                          Permission.MODERATE_COMMENTS, False),
+            'Administrator': (0xff, False)
+        }
+        for r in roles:
+            role = Role.query.filter_by(name=r).first()
+            if role is None:
+                role = Role(name=r)
+                role.permissions = roles[r][0]
+                role.default = roles[r][1]
+                db.session.add(role)
+                db.session.commit()
+```
+
+`insert_roles()`函数，数据库有该账户则更新，没有则插入
+
+#### 9.2 赋予用户角色
+
+用户在程序注册账户时，会被赋予适当的角色，大多数用户注册的角色是`User`。管理员的注册流程是：在配置`FLASKY_ADMIN`字段的值中设置管理员的邮箱，注册时会判断，如果是管理员的邮箱注册就会设置为管理员权限
+
+```python
+class User(UserMixin, db.Model):
+    # ...
+    def __init__(self, **kwargs):
+        super(User, self).__init__(**kwargs)
+        if self.role is None:
+            if self.email == current_app.config['FLASKY_ADMIN']:
+                self.role = Role.query.filter_by(permissions=0xff).first()
+            if self.role is None:
+                self.role = Role.query.filter_by(default=True).first()
+                    # ...
+```
+
+#### 9.3 角色验证
+
+在`User`模型和`AnonymousUser`模型中添加一个辅助方法，检查是否有指定的权限
+
+```python
+from flask.ext.login import UserMixin, AnonymousUserMixin
+class User(UserMixin, db.Model):
+    # ...
+    def can(self, permissions):
+        return self.role is not None and \
+    (self.role.permissions & permissions) == permissions
+    def is_administrator(self):
+        return self.can(Permission.ADMINISTER)
+class AnonymousUser(AnonymousUserMixin):
+    def can(self, permissions):
+        return False
+    def is_administrator(self):
+        return False
+login_manager.anonymous_user = AnonymousUser
+```
+
+自定义装饰器，让视图函数只对具有特定权限的用户开放
+
+```python
+from functools import wraps
+from flask import abort
+from flask.ext.login import current_user
+def permission_required(permission):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.can(permission):
+                abort(403)
+                return f(*args, **kwargs)
+            return decorated_function
+        return decorator
+def admin_required(f):
+    return permission_required(Permission.ADMINISTER)(f)
+```
+
+如何使用这些装饰器
+
+```python
+from decorators import admin_required, permission_required
+from .models import Permission
+@main.route('/admin')
+@login_required
+@admin_required
+def for_admins_only():
+    return "For administrators!"
+
+@main.route('/moderator')
+@login_required
+@permission_required(Permission.MODERATE_COMMENTS)
+def for_moderators_only():
+    return "For comment moderators!"
+
+```
+
+`Permission`类为所有权限位定义了常量以便于获取
+
+使用上下文管理器让变量在所有模板中全局可访问
+
+`app/main/__init__.py`
+
+```python
+@main.app_context_processor
+def inject_permissions():
+ 	return dict(Permission=Permission)
+```
+
+
+
+
+
+
+
+
 ## 备注
 
 * github链接地址:
