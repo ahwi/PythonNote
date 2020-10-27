@@ -927,7 +927,94 @@ class User(db.Model):
 
 **2. 在蓝本中实现程序功能**
 
+## 第二部分 实例：社交博客程序
+
 ### 第8章 用户认证
+
+#### 8.1 Flask的认证扩展
+
+* Flask-Login：管理已登录用户的用户会话。
+* Werkzeug：计算密码散列值并进行核对。
+* itsdangerous：生成并核对加密安全令牌。
+* Flask-Mail：发送与认证相关的电子邮件。
+* Flask-Bootstrap：HTML 模板。
+* Flask-WTF：Web 表单。 
+
+#### 8.2 密码安全性
+
+`werkzeug`实现密码散列
+
+* `generate_password_hash(password, method=pbkdf2:sha1, salt_length=8)`
+* `check_password_hash(hash, password)`
+
+#### 8.3 创建蓝本
+
+不同功能 --创建--> 不同蓝本
+
+认证蓝本 auth --> 用户认证相关的路由
+
+注册蓝本函数：
+
+`app/__init__.py`
+
+```python
+def create_app(config_name):
+ # ...
+ from .auth import auth as auth_blueprint
+ app.register_blueprint(auth_blueprint, url_prefix='/auth')
+ return app
+```
+
+url_prefix参数 --> 蓝本中定义的路由都会加上指定前缀
+
+示例：
+
+* 创建蓝本
+* 蓝本中的路由和视图函数
+* 附加蓝本
+
+#### 8.4 使用Flask-Login认证用户
+
+`Flask-Login`:管理用户的认证状态
+
+* 必须实现的方法：
+
+  * is_authenticated()
+  * is_active()
+  * is_anonymous()
+  * get_id()
+
+* 实现
+
+  * 模型类中直接实现方法
+  * 使用UserMixim类   -->  包含这些方法的默认实现
+
+* 示例：
+
+  * 修改User模型
+
+  * 初始化Flask-Login
+
+  * 加载用户的回调函数
+
+  * 保护路由
+
+    * `login_required`修饰器
+      * 如果未认证的用户访问这个路由，`Flask-Login`会拦截请求，把用户发往登录页面
+
+  * 添加登录表单
+
+    * 表单类
+    * utf.quick_form()宏渲染表单
+    * 添加登入登出导航条
+
+  * 登入用户
+
+    登陆路由的实现
+
+  * 登出用户
+
+  * 测试登陆
 
 #### 8.5 注册新用户
 
