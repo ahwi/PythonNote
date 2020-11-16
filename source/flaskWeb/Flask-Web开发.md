@@ -1,8 +1,38 @@
 # Flask-Web开发：基于Python的Web应用开发实战
 
-## 第二章 程序的基本结构
+###  第1章 安装
 
-初始化:
+**有两个主要依赖**
+
+* 路由、调试、web服务器网关接口子系统 -- 由 Werkzeug提供
+* 模板系统  -- 由Jinja2提供
+
+**扩展形式实现**
+
+* 数据库访问
+* web表单验证
+* 用户认证
+* 等等
+
+**使用虚拟环境**
+
+* linux
+
+  ```bash
+  python -m venv ./venv
+  source venv/bin/activate
+  ```
+
+* windows
+
+  ```cmd
+  python -m venv ./venv
+  venv/Scripts/activate
+  ```
+
+###  第2章 程序的基本结构
+
+#### 2.1 初始化
 
 * 必须创建一个程序实例
 
@@ -17,7 +47,7 @@
 
 * Flask使用构造函数的name参数决定程序的根目录
 
-路由和视图函数:
+#### 2.2 路由和视图函数:
 
 客户端 --(请求)--> web服务器 --(请求)--> Flask程序实例
 
@@ -43,18 +73,20 @@
 
   * 支持的类型：int、float、path(也是字符串)
 
-启动服务器：
+#### 2.3 启动服务器：
 
 ```python
 if __name__ == '__main__':
     app.run(debug=True)
 ```
 
+Flask提供的Web服务器不适合在生成环境中使用。第17章会介绍生产环境Web服务器。
 
 
-**请求-响应循环**
 
-**1. 程序和请求上下文**
+#### 2.5 请求-响应循环
+
+##### 2.5.1 程序和请求上下文
 
 flask使用上下文，让视图函数可以访问请求对象和其他对象
 
@@ -95,7 +127,6 @@ Flask在分发请求之前激活（或推送）程序和请求上下文，请求
 >>> from hello import app
 >>> from flask import current_app
 >>> current_app.name
-程序的基本结构 ｜ 13
 Traceback (most recent call last):
 ...
 RuntimeError: working outside of application context
@@ -108,7 +139,7 @@ RuntimeError: working outside of application context
 
 
 
-**2. 请求调度**
+##### 2.5.2 请求调度
 
 Flask通过URL映射(URL和视图函数之间的对应关系)查找请求的URL
 
@@ -127,7 +158,7 @@ Map([<Rule '/' (HEAD, OPTIONS, GET) -> index>,
  <Rule '/user/<name>' (HEAD, OPTIONS, GET) -> user>])
 ```
 
-**3. 请求钩子**
+##### 2.5.3 请求钩子
 
 有时在处理请求之前或之后执行代码会很有用，flask使用请求钩子来实现
 
@@ -140,7 +171,7 @@ Map([<Rule '/' (HEAD, OPTIONS, GET) -> index>,
 
 在请求钩子函数和视图函数之间共享数据一般使用上下文全局变量 g。
 
-**4. 响应**
+##### 2.5.4 响应
 
 HTTP协议需要的不仅仅只有作为请求响应的字符串，还有一个很重要的部分是状态码
 
@@ -157,14 +188,14 @@ def index():
 
 * Flask视图函数还可以返回Response对象
 
-```python
-from flask import make_response
-@app.route('/')
-def index():
- response = make_response('<h1>This document carries a cookie!</h1>')
- response.set_cookie('answer', '42')
- return response
-```
+    ```python
+    from flask import make_response
+    @app.route('/')
+    def index():
+        response = make_response('<h1>This document carries a cookie!</h1>')
+        response.set_cookie('answer', '42')
+        return response
+    ```
 
 * 重定向的特殊响应类型：
 
@@ -174,7 +205,7 @@ def index():
   from flask import redirect
   @app.route('/')
   def index():
-   return redirect('http://www.example.com')
+      return redirect('http://www.example.com')
   ```
 
 * 处理错误的特殊响应类型abort
@@ -183,21 +214,19 @@ def index():
   from flask import abort
   @app.route('/user/<id>')
   def get_user(id):
-   user = load_user(id)
-   if not user:
-   abort(404)
-   return '<h1>Hello, %s</h1>' % user.name
+      user = load_user(id)
+      if not user:
+          abort(404)
+      return '<h1>Hello, %s</h1>' % user.name
   ```
 
   abort 不会把控制权交还给调用它的函数，而是抛出异常把控制权交给 Web 服务器。
 
-
-
-**Flask扩展**
+#### 2.6 Flask扩展
 
 Flask被设计为可扩展形式，如数据库和用户认证
 
-**1. 使用Flask-Script支持命令行选项**
+##### 使用Flask-Script支持命令行选项
 
 flask支持很多启动设置选项，但只能在脚本中作为参数传给`app.run()`函数，使用`Flask-Script`可以为flask添加一个命令行解析器的扩展。
 
@@ -214,7 +243,7 @@ flask支持很多启动设置选项，但只能在脚本中作为参数传给`ap
   manager = Manager(app)
   
   if __name__ == "__main__":
-      manager.run()
+  	manager.run()
   ```
 
   为flask开发的扩展都暴露在flask.ext命名空间下，`Flask-Script`输出一个名为Manager的类。该扩展的初始化方法也适用于其他很多扩展：程序实例--(作为参数)-->构造函数-->初始化主类的实例-->在其他扩展中使用。
@@ -1187,9 +1216,250 @@ def inject_permissions():
  	return dict(Permission=Permission)
 ```
 
+### 第10章 用户资料
+
+实现Flasky的用户资料页面
+
+#### 10.1 资料信息
+
+添加一些关于用户的其他信息，扩充`User`模型
+
+```python
+class User(UserMixin, db.Model):
+    name = db.Column(db.String(64))
+    location = db.Column(db.String(64))
+    about_me = db.Column(db.Text())
+    member_since = db.Column(db.DateTime(), default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime(), default=datetime.utcnow)
+```
+
+刷新用户的最后访问时间
+
+```python
+class User(UserMixin, db.Model):
+    # ...
+    def ping(self):
+        self.last_seen = datetime.utcnow()
+        db.session.add(self)
+```
+
+在每次请求前运行`ping`, 使用`auth`蓝本中的`before_app_request`进行修饰
+
+```python
+@auth.before_app_request
+def before_request():
+    if current_user.is_authenticated():
+        current_user.ping()
+        if not current_user.confirmed \
+        and request.endpoint[:5] != 'auth.':
+            return redirect(url_for('auth.unconfirmed'))
+```
+
+#### 10.2 用户资料页面
+
+添加用户资料页面
+
+* 添加资料页面的路由
+
+  ```python
+  @main.route('/user/<username>')
+  def user(username):
+      user = User.query.filter_by(username=username).first()
+      if user is None:
+          abort(404)
+          return render_template('user.html', user=user)
+  ```
+
+* 添加用户资料页面的模板
+
+  ```html
+  {% block page_content %}
+  <div class="page-header">
+      <h1>{{ user.username }}</h1>
+      {% if user.name or user.location %}
+      <p>
+          {% if user.name %}{{ user.name }}{% endif %}
+          {% if user.location %}
+          From <a href="http://maps.google.com/?q={{ user.location }}">
+          {{ user.location }}
+          </a>
+          {% endif %}
+      </p>
+      {% endif %}
+      {% if current_user.is_administrator() %}
+      <p><a href="mailto:{{ user.email }}">{{ user.email }}</a></p>
+      {% endif %}
+      {% if user.about_me %}<p>{{ user.about_me }}</p>{% endif %}
+      <p>
+          Member since {{ moment(user.member_since).format('L') }}.
+          Last seen {{ moment(user.last_seen).fromNow() }}.
+      </p>
+  </div>
+  {% endblock %}
+  ```
+
+* 添加快捷访问链接
+
+  ```html
+  {% if current_user.is_authenticated() %}
+  <li>
+      <a href="{{ url_for('main.user', username=current_user.username) }}">
+          Profile
+      </a>
+  </li>
+  {% endif %}
+  ```
 
 
+#### 10.3 资料编辑器
 
+##### 10.3.1 用户级别的资料编辑器
+
+* 资料编辑表单
+
+  ```python
+  class EditProfileForm(Form):
+      name = StringField('Real name', validators=[Length(0, 64)])
+      location = StringField('Location', validators=[Length(0, 64)])
+      about_me = TextAreaField('About me')
+      submit = SubmitField('Submit')
+  ```
+
+* 资料编辑路由
+
+  ```python
+  @main.route('/edit-profile', methods=['GET', 'POST'])
+  @login_required
+  def edit_profile():
+      form = EditProfileForm()
+      if form.validate_on_submit():
+          current_user.name = form.name.data
+          current_user.location = form.location.data
+          current_user.about_me = form.about_me.data
+          db.session.add(current_user)
+          flash('Your profile has been updated.')
+          return redirect(url_for('.user', username=current_user.username))
+      form.name.data = current_user.name
+      form.location.data = current_user.location
+      form.about_me.data = current_user.about_me
+      return render_template('edit_profile.html', form=form)
+  ```
+
+* 在用户资料页面中添加一个编辑页面的链接
+
+  ```html
+  {% if user == current_user %}
+  <a class="btn btn-default" href="{{ url_for('.edit_profile') }}">
+      Edit Profile
+  </a>
+  {% endif %}
+  ```
+
+##### 10.3.2 管理员级别的资料编辑器
+
+管理员处理普通用户的基本编辑功能，还需要能编辑用户的电子邮件、用户名、确认状态和角色
+
+* 管理员使用的资料编辑表单
+
+  ```python
+  class EditProfileAdminForm(Form):
+      email = StringField('Email', validators=[Required(), Length(1, 64),
+                                               Email()])
+      username = StringField('Username', validators=[
+          Required(), Length(1, 64), Regexp('^[A-Za-z][A-Za-z0-9_.]*$', 0,
+                                            'Usernames must have only letters, '
+                                            'numbers, dots or underscores')])
+      confirmed = BooleanField('Confirmed')
+      role = SelectField('Role', coerce=int)
+      name = StringField('Real name', validators=[Length(0, 64)])
+      location = StringField('Location', validators=[Length(0, 64)])
+      about_me = TextAreaField('About me')
+      submit = SubmitField('Submit')
+      def __init__(self, user, *args, **kwargs):
+          super(EditProfileAdminForm, self).__init__(*args, **kwargs)
+          self.role.choices = [(role.id, role.name)
+                               for role in Role.query.order_by(Role.name).all()]
+          self.user = user
+          def validate_email(self, field):
+              if field.data != self.user.email and \
+              User.query.filter_by(email=field.data).first():
+                  raise ValidationError('Email already registered.')
+                  def validate_username(self, field):
+                      if field.data != self.user.username and \
+                      User.query.filter_by(username=field.data).first():
+                          raise ValidationError('Username already in use.')
+  ```
+
+* 管理员的资料编辑路由
+
+  ```python
+  @main.route('/edit-profile/<int:id>', methods=['GET', 'POST'])
+  @login_required
+  @admin_required
+  def edit_profile_admin(id):
+      user = User.query.get_or_404(id)
+      form = EditProfileAdminForm(user=user)
+      if form.validate_on_submit():
+          user.email = form.email.data
+          user.username = form.username.data
+          user.confirmed = form.confirmed.data
+          user.role = Role.query.get(form.role.data)
+          user.name = form.name.data
+          user.location = form.location.data
+          user.about_me = form.about_me.data
+          db.session.add(user)
+          flash('The profile has been updated.')
+          return redirect(url_for('.user', username=user.username))
+      form.email.data = user.email
+      form.username.data = user.username
+      form.confirmed.data = user.confirmed
+      form.role.data = user.role_id
+      form.name.data = user.name
+      form.location.data = user.location
+      form.about_me.data = user.about_me
+      return render_template('edit_profile.html', form=form, user=user)
+  ```
+
+* 在用户资料页面添加链接按钮
+
+  ```html
+  {% if current_user.is_administrator() %}
+  <a class="btn btn-danger"
+     href="{{ url_for('.edit_profile_admin', id=user.id) }}">
+      Edit Profile [Admin]
+  </a>
+  {% endif %}
+  ```
+
+#### 10.4 用户头像
+
+使用`Gravatar`提供的用户头像服务
+
+* 生成`Gravatar URL`
+
+  ```python
+  import hashlib
+  from flask import request
+  
+  class User(UserMixin, db.Model):
+      # ...
+      def gravatar(self, size=100, default='identicon', rating='g'):
+          if request.is_secure:
+              url = 'https://secure.gravatar.com/avatar'
+              else:
+                  url = 'http://www.gravatar.com/avatar'
+                  hash = hashlib.md5(self.email.encode('utf-8')).hexdigest()
+                  return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(
+                      url=url, hash=hash, size=size, default=default, rating=rating)
+  ```
+
+* 在资料页面中添加头像的链接
+
+  ```html
+  <img class="img-rounded profile-thumbnail" src="{{ user.gravatar(size=256) }}">
+  ```
+
+* 
 
 
 
@@ -1202,8 +1472,40 @@ def inject_permissions():
   https://github.com/miguelgrinberg/flasky.git
   ```
 
+* flask是web框架，如果不用web服务器直接部署和配合web服务器（如Nginx）部署，有什么区别？
+
+  * 在2.4有个提示：Flask提供的Web服务器不适合在生成环境中使用。第17章会介绍生产环境Web服务器。
+
 * flask是如何使用上下文在多线程的环境中，让某个变量成为某一线程的全局可访问变量
 
+* 使用缓冲的MD5值生成Gravatar URL
+
+  ```python
+  class User(UserMixin, db.Model):
+      # ...
+      avatar_hash = db.Column(db.String(32))
+      def __init__(self, **kwargs):
+          # ...
+          if self.email is not None and self.avatar_hash is None:
+              self.avatar_hash = hashlib.md5(
+                  self.email.encode('utf-8')).hexdigest()
+              def change_email(self, token):
+                  # ...
+                  self.email = new_email
+                  self.avatar_hash = hashlib.md5(
+                      self.email.encode('utf-8')).hexdigest()
+                  db.session.add(self)
+                  return True
+              def gravatar(self, size=100, default='identicon', rating='g'):
+                  if request.is_secure:
+                      url = 'https://secure.gravatar.com/avatar'
+                      else:
+                          url = 'http://www.gravatar.com/avatar'
+                          hash = self.avatar_hash or hashlib.md5(
+                              self.email.encode('utf-8')).hexdigest()
+                          return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(
+                              url=url, hash=hash, size=size, default=default, rating=rating)
+  ```
 
 
 
