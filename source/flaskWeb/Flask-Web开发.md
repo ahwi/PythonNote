@@ -256,43 +256,53 @@ flask支持很多启动设置选项，但只能在脚本中作为参数传给`ap
 
 为了渲染模板，Flask使用`Jinja2`模板引擎
 
-**Jinja2模板引擎**
+#### 3.1 Jinja2模板引擎
 
-示例：
+新式最简单的`Jinja2`模板就是一个包含响应文本的文件
+
+如:
+
+`templates/index.html`
 
 ```html
 <h1>Hello, {{name}}!</h1>
 ```
 
-**1. 渲染模板**
+`templates/user.html`
+
+```html
+<h1>Hello, {{ name }}!</h1>
+```
+
+##### 3.1.1 渲染模板
 
 示例：
 
 ```python
-    from flask import Flask, render_template
+from flask import Flask, render_template
 
-    app = Flask(__name__)
+app = Flask(__name__)
 
-    @app.route('/')
-    def index():
-        return render_template("index.html")
+@app.route('/')
+def index():
+    return render_template("index.html")
 
-    @app.route('/user/<name>')
-    def user(name):
-        return render_template("user.html", name=name)
+@app.route('/user/<name>')
+def user(name):
+    return render_template("user.html", name=name)
 
-    if __name__ == '__main__':
-        app.run()
+if __name__ == '__main__':
+    app.run()
 ```
 
 * 默认情况下，Flask在templates子文件夹中寻找模板
-* Flask提供`render_template`函数把`Jinjia2`模板引擎集成到程序中
+* Flask提供`render_template`函数把`Jinja2`模板引擎集成到程序中
 
-**2. 变量**
+##### 3.1.2 变量
 
 * 模板中使用的`{{ name }}`结构表示一个变量，告诉模板引擎这个位置的值从渲染模板时使用的数据中获取
 
-* Jinja2能失败列表、字典和对象等，如：
+* Jinja2能识别所有类型的变量，甚至是列表、字典和对象等，如：
 
   ```html
   <p>A value from a dictionary: {{ mydict['key'] }}.</p>
@@ -402,7 +412,7 @@ Jinja2提供了多种控制结构，可用来改变模板的渲染流程
   {% endblock %}
   ```
 
-**使用Flask-Bootstrap集成Twitter Bootstrap**
+#### 3.2 使用Flask-Bootstrap集成Twitter Bootstrap
 
 Bootstrap介绍:
 
