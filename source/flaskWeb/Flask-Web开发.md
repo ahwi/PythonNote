@@ -571,7 +571,7 @@ base.html:
 {% endblock %}
 ```
 
-**链接**
+#### 3.4 链接
 
 flask提供`url_for()`辅助函数，使用程序URL映射中保存的信息生成URL，生成某个视图对应的url链接
 
@@ -583,7 +583,7 @@ flask提供`url_for()`辅助函数，使用程序URL映射中保存的信息生�
   ('user', name='john', _external=True)` 的返回结果是`http://localhost:5000/user/john`
 * `url_for()` 能将任何额外参数添加到查询字符串中。例如，`url_for('index', page=2)` 的返回结果是 `/?page=2`
 
-**静态文件**
+#### 3.5 静态文件
 
 flask使用static路由来引用静态文件：
 
@@ -602,7 +602,7 @@ flask使用static路由来引用静态文件：
 {% endblock %}
 ```
 
-**使用Flask-Moment本地化日期和时间**
+#### 3.6 使用Flask-Moment本地化日期和时间
 
 解决服务器和客户端时间问题的方案：服务器使用UTC时间，然后把时间单位发送给web浏览器，转换成当地时间，然后渲染。
 
@@ -655,11 +655,13 @@ def index():
 
 ### 第4章 web表单
 
-`Flask-WTF`扩展优化处理web表单的过程，这个扩展对独立的`WTForms`包进行了包装
+* 请求对象包含客户端发出的所有请求信息，`request.form`能获取`POST`请求中提交的表单数据
 
-使用pip安装：
+* `Flask-WTF`扩展优化处理web表单的过程，这个扩展对独立的`WTForms`包进行了包装
 
-`pip install flask-wtf`
+  使用pip安装：
+
+  `pip install flask-wtf`
 
 #### 4.1 跨站请求伪造保护
 
