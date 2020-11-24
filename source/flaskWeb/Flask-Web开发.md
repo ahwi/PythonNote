@@ -826,9 +826,7 @@ SQL和NoSQL的对比
 
 **安装:**
 
-```shell
-pip install flask-sqlalchemy
-```
+`pip install flask-sqlalchemy`
 
 在`Flask-SQLAlchemy`中，<font color=red>数据库使用URL指定</font>。使用方式如下：
 
@@ -879,7 +877,13 @@ class User(db.Model):
         return '<User %r>' % self.username
 ```
 
+* 最常用的`SQLAlchemy`类型
 
+  见P48表5-2
+
+* 最常使用的SQLAlchemy列选项
+
+  见P48表5-3
 
 #### 5.7 关系
 
@@ -908,6 +912,172 @@ class User(db.Model):
 
   * 第一个参数表明这个关系的另一端是哪个模型
   * backref参数向User模型中添加一个role属性，从而定义反向关系。这一属性可替代`role_id`访问Role模型，此时所获取的是模型对象，而不是外键的值
+
+常用的SQLAlchemy关系选项
+
+​	P49  表5-4
+
+#### 5.8 数据库操作
+
+增删改查的操作
+
+#### 5.9 在视图函数中操作数据库
+
+将用户名写入到数据库中
+
+`hello.py`
+
+```python
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    form = NameForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.name.data).first()
+        if user is None:
+            user = User(username=form.name.data)
+            db.session.add(user)
+            session['known'] = False
+        else:
+            session['known'] = True
+        session['name'] = form.name.data
+        # form.name.data = ''
+        return redirect(url_for('index'))
+    return render_template('index.html',
+                           form=form, name=session.get('name'),
+                           known=session.get('known', False))
+```
+
+对应的模板新版本
+
+`templates/index.html`
+
+```html
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Flasky{% endblock %}
+
+{% block page_content %}
+    <div class="page-header">
+        <h1>Hello, {% if name %}{{ name }}{% else %}Stranger{% endif %}!</h1>
+        {% if not known %}
+        <p>Pleased to meet you!</p>
+        {% else %}
+        <p>Heppy to see you again!</p>
+        {% endif %}
+    </div>
+    {{ wtf.quick_form(form) }}
+{% endblock %}
+```
+
+#### 5.10 集成Python shell
+
+启动shell命令行模式时，自动导入需要导入的模块
+
+示例：为shell命令添加一个上下文
+
+```python
+from flask.ext.script import Shell
+
+def make_shell_context():
+	return dict(app=app, db=db, User=User, Role=Role) 
+manager.add_command("shell", Shell(make_context=make_shell_context))
+```
+
+操作:
+
+```bash
+$ python hello.py shell
+>>> app
+<Flask 'app'>
+>>> db
+<SQLAlchemy engine='sqlite:////home/flask/flasky/data.sqlite'>
+>>> User
+<class 'app.User'>
+```
+
+#### 5.11 使用Flask-Migrate实现数据库迁移
+
+`Alembic`数据库迁移框架
+
+##### 5.11.1 创建迁移仓库
+
+* 安装
+
+  `pip install flask-migrate`
+
+* 配置`Flask-Migrate`
+
+  `hello.py`
+
+  ```python
+  from flask.ext.migrate import Migrate, MigrateCommand
+  # ...
+  migrate = Migrate(app, db)
+  manager.add_command('db', MigrateCommand)
+  ```
+
+  为了导出数据库迁移命令，Flask-Migrate 提供了一个 MigrateCommand 类，可附加到FlaskScript 的 manager 对象上。
+
+* 使用init子命令创建迁移仓库
+
+  ```bash
+  (venv) $ python hello.py db init
+   Creating directory /home/flask/flasky/migrations...done
+   Creating directory /home/flask/flasky/migrations/versions...done
+   Generating /home/flask/flasky/migrations/alembic.ini...done
+   Generating /home/flask/flasky/migrations/env.py...done
+   Generating /home/flask/flasky/migrations/env.pyc...done
+   Generating /home/flask/flasky/migrations/README...done
+   Generating /home/flask/flasky/migrations/script.py.mako...done
+   Please edit configuration/connection/logging settings in
+   '/home/flask/flasky/migrations/alembic.ini' before proceeding.
+  ```
+
+##### 5.11.2 创建迁移脚本
+
+* `Alembic`中，数据迁移用迁移脚本表示，脚本中有两个函数
+  * `upgrade()`：把迁移的改动应用到数据库中
+  * `downgrade()`：将改动删除
+* Alembic 具有添加和删除改动的能力，因此数据库可重设到修改历史的任意一点。
+* 可以使用 revision 命令手动创建 Alembic 迁移，也可使用 migrate 命令自动创建
+  * 手动创建的迁移只是一个骨架，upgrade() 和 downgrade() 函数都是空的
+  * 自动创建的迁移会根据模型定义和数据库当前状态之间的差异生成 upgrade() 和 downgrade() 函数的内容，但自动创建的迁移不一定总是正确的，需要进行检查
+
+示例：
+
+使用`migrate`子命令来自动创建迁移脚本
+
+```bash
+(venv) $ python hello.py db migrate -m "initial migration"
+INFO [alembic.migration] Context impl SQLiteImpl.
+INFO [alembic.migration] Will assume non-transactional DDL.
+INFO [alembic.autogenerate] Detected added table 'roles'
+INFO [alembic.autogenerate] Detected added table 'users'
+INFO [alembic.autogenerate.compare] Detected added index
+'ix_users_username' on '['username']'
+ Generating /home/flask/flasky/migrations/versions/1bc
+ 594146bb5_initial_migration.py...done
+```
+
+注：猜测：`ablembic`首次是根据代码中的表数据库模型进行创建迁移脚本，需要先删除已有的数据库，不然没有初始脚本和已有数据库的变化不会产生迁移脚本
+
+##### 5.11.3 更新数据库
+
+使用`db upgrade`命令把迁移应用到数据库中
+
+```base
+(venv) $ python hello.py db upgrade
+INFO [alembic.migration] Context impl SQLiteImpl.
+INFO [alembic.migration] Will assume non-transactional DDL.
+INFO [alembic.migration] Running upgrade None -> 1bc594146bb5, initial migration
+```
+
+对第一个迁移来说，其作用和调用 db.create_all() 方法一样。但在后续的迁移中，upgrade 命令能把改动应用到数据库中，且不影响其中保存的数据。
+
+
+
+
 
 ### 第7章 大型程序的结构
 
