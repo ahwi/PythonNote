@@ -687,3 +687,49 @@ print("fib(4) is %r" % result)
 
 <https://zhuanlan.zhihu.com/p/125084805>
 
+
+
+
+
+## 遇到的问题
+
+### 1. `Virtual host 奔溃`
+
+**1. 遇到的问题**
+
+管理界面报`Virtual host im_xxx experienced an error on node rabbit@iZj6c4uljxtos9wjnwczp2Z and may be inaccessible`的错误
+
+![1606360042795](assets/1606360042795.png)
+
+**2. 排查原因**
+
+* 可能超过连接的限制：
+
+  前一天有修改消费端的连接参数，将heartbeat改成0（rabbitmq服务器会根据心跳来判断是否断开失效的连接，如果设置成0应该会导致连接不会被服务器主动断开）
+
+  ```python
+          return pika.ConnectionParameters(host=self.config.xx_host,
+                                           port=self.config.xx_port,
+                                           virtual_host=self.config.xx_db,
+                                           credentials=credentials,
+                                           blocked_connection_timeout=60,
+                                           socket_timeout=60,
+                                           stack_timeout=60,
+                                           heartbeat=0
+                                           )
+  ```
+
+  参考：https://stackoverflow.com/questions/52271432/rabbitmq-virtual-host-error-when-starting-service
+
+  解决方法：可以设置virtual_host的连接限制
+
+* 磁盘空间不足，超过限制，查看rabbitmq的日志，发现有如下的日志：
+
+  ```text
+  2020-11-25 22:03:29.746 [info] <0.382.0> Free disk space is insufficient. Free bytes: 36388864. Limit: 50000000
+  2020-11-25 22:03:29.746 [warning] <0.375.0> disk resource limit alarm set on node rabbit@iZj6c4uljxtos9wjnwczp2Z.
+  
+  **********************************************************
+  *** Publishers will be blocked until this alarm clears ***
+  **********************************************************
+  ```

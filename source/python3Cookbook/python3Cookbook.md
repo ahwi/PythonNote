@@ -604,7 +604,64 @@ p.start()
 
 再次重申，这段代码仅适用于 CountdownTask 类是以独立于实际的并发手段（多线程、多进程等等）实现的情况。
 
+### 扩展
 
+关于daemon的区别：
+
+* daemon为True的子线程会在主线程结束之后直接退出，除非在主线程加上join()进行等待
+
+* daemon为False的子线程，会在主线程结束之后继续运行，程序会等待线程结束之后退出
+
+```python
+import time
+import threading
+
+
+def countdown(n):
+    while n > 0:
+        print('T-minus', n)
+        n -= 1
+        time.sleep(5)
+
+
+def start():
+    t = threading.Thread(target=countdown, args=(5, ))
+    # t.daemon = True
+    t.start()
+    while True:
+        print("aaaa")
+        time.sleep(5)
+        break
+    print("main quit")
+
+
+if __name__ == '__main__':
+    t = threading.Thread(target=start)
+    t.start()
+    print("all quit")
+```
+
+输出:
+
+```txt
+all quit
+T-minusaaaa
+ 5
+T-minusmain quit
+ 4
+T-minus 3
+T-minus 2
+T-minus 1
+```
+
+设置`t.daemon=True`之后的输出：
+
+```txt
+all quit
+T-minus aaaa
+5
+T-minusmain quit 
+```
 
 ## 12.2 判断线程是否启动
 

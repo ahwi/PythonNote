@@ -580,3 +580,61 @@ if __name__=='__main__':
 	# ......
 ```
 
+
+
+## 将py文件编译成so
+
+**1. 方式1：**
+
+参考：
+
+`https://www.jb51.net/article/177030.htm`
+
+代码:
+
+```python
+
+```
+
+**2. 方式2**
+
+使用`py2sec`编译脚本
+
+参考：`https://github.com/cckuailong/py2sec`
+
+**3. 编译遇到的问题：**
+
+* 有个md5函数编译之前执行不会报错，编译之后报错
+
+  ```txt
+  Traceback (most recent call last):
+  File "testCode.py", line 10, in <module>
+    main()
+  File "testCode.py", line 7, in main
+    print(get_str_md5(s))
+  File "testCode/testBase.py", line 6, in testCode.testBase.get_str_md5
+  TypeError: Expected unicode, got bytes  
+  ```
+
+  代码:
+
+  ```python
+  import hashlib
+  
+  def get_str_md5(data: str):
+      if isinstance(data, str):
+          data = data.encode("utf-8") 
+      m = hashlib.md5()
+      m.update(data)
+      return m.hexdigest()
+  
+  def get_str_md5(data: str):
+      bdata = data.encode("utf-8") if isinstance(data, str) else data
+      m = hashlib.md5()
+      m.update(bdata)
+      return m.hexdigest()
+  
+  ```
+
+  第一个函数会报错，后改写成第二个使用的方式就正常了，可能原因是变量的引用导致的
+
