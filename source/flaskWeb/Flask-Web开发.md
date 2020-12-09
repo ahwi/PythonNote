@@ -1211,25 +1211,176 @@ url_prefix参数 --> 蓝本中定义的路由都会加上指定前缀
   * 保护路由
 
     * `login_required`修饰器
+
       * 如果未认证的用户访问这个路由，`Flask-Login`会拦截请求，把用户发往登录页面
 
-  * 添加登录表单
+##### 8.4.3 添加登录表单
 
-    * 表单类
-    * utf.quick_form()宏渲染表单
-    * 添加登入登出导航条
+呈现给用户的登陆表单包含一个用于输入电子邮件地址的文本字段、一个密码字段、一个"记住我"复选框和提交按钮。
 
-  * 登入用户
+**登陆表单类：**
 
-    登陆路由的实现
+```python
+from flask.ext.wtf import Form
+from wtforms import StringField, PasswordField, BooleanField, SubmitField
+from wtforms.validators import DataRequired, Length, Email
 
-  * 登出用户
 
-  * 测试登陆
+class LoginForm(Form):
+    email = StringField('Email',
+                        validators=[DataRequired(), Length(1, 64),
+                                             Email()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    remember_me = BooleanField('Keep me logged in')
+    submit = SubmitField('Log In')
+```
+
+**`auth/login.html`模板**
+
+使用`wtf.quick_form()`宏渲染表单
+
+```html
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Flasky - Login{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Login</h1>
+</div>
+    {{ wtf.quick_form(form) }}
+{% endblock %}
+```
+
+**添加登入登出导航条**
+
+在`base.html`模板中的导航条中添加登入登出状态
+
+```html
+        <ul class="nav navbar-nav navbar-right">
+            {% if current_user.is_authenticated() %}
+            <li><a href="{{ url_for('auth.logout') }}">Sign Out</a></li>
+            {% else %}
+            <li><a href="{{ url_for('auth.login') }}">Sign In</a></li>
+            {% endif %}
+        </ul>
+```
+
+判断条件中的变量`current_user`由`Flask-Login`定义，且在视图函数和模板中自动可用。
+
+##### 8.4.4 登入用户
+
+**添加登陆路由**
+
+`app/auth/view.py`登陆路由
+
+```python
+from flask import render_template, redirect, request, url_for, flash
+from flask.ext.login import login_user
+from . import auth
+from ..models import User
+from .forms import LoginForm
+
+
+@auth.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user is not None and user.verify_password(form.password.data):
+            login_user(user, form.remember_me.data)
+            return redirect(request.args.get('next') or url_for('main.index'))
+        flash('Invalid username or password.')
+    return render_template('auth/login.html', form=form)
+```
+
+* `login_user()`函数的参数是要登陆的用户，以及可选的"记住我"布尔值，如果值为False，那么关闭浏览器后用户会话就国企，如果为True会在浏览器中写一个长期有效的cookie，使用这个cookie可用复现用户会话。
+
+**渲染登陆表单**
+
+```html
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Flasky - Login{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Login</h1>
+</div>
+<div class="col-md-4">
+    {{ wtf.quick_form(form) }}
+</div>
+{% endblock %}
+```
+
+##### 8.4.5 登出用户
+
+退出路由的实现
+
+`app/auth/view.py`
+
+```python
+from flask.ext.login import logout_user, login_required 
+
+@auth.route('/logout')
+@login_required
+def logout():
+    login_user()
+    flash('You have benn logged out')
+    return redirect(url_for('main.index'))
+```
+
+##### 8.4.6 测试登陆
+
+为已登陆的用户显示一个欢迎消息
+
+`app/templates/index.html`
+
+```python
+    <h1>Hello,
+        {% if current_user.is_authenticated() %}
+            {{ current_user.username }}
+        {% else %}
+            Stranger
+        {% endif %}!
+    </h1>
+```
+
+
+
+
 
 #### 8.5 注册新用户
 
-**1. 添加用户表单**
+##### 1. 添加用户表单
+
+`app/auth/forms.py`
+
+````python
+class RegistrationForm(Form):
+    email = StringField('Email',
+                        validators=[Required(), Length(1, 64), Email()])
+    username = StringField('Username', validators=[
+        Required(), Length(1, 64), Regexp('^[A-Za-z][A-Za-z0-9_.]*$', 0,
+                                          'Username must have only letters'
+                                          'numbers, dots or underscores'
+                                          )
+    ])
+    password = PasswordField('Password', validators=[
+        Required(), EqualTo('password2', message='Passwords must match.')])
+    password2 = PasswordField('Confirm password', validators=[Required()])
+    submit = SubmitField('Register')
+
+    def validate_email(self, field):
+        if User.query.filter_by(email=field.data).first():
+            raise ValidationError('Email already registered.')
+
+    def validate_username(self, field):
+        if User.query.filter_by(username=field.data).first():
+            raise ValidationError('Username already in use.')
+````
 
 * 验证函数：
 
@@ -1240,9 +1391,56 @@ url_prefix参数 --> 蓝本中定义的路由都会加上指定前缀
 
   `validate_` + 字段名    -->  和常规验证函数一起调用
 
-* 添加到注册页面的链接
+##### 2. 添加注册模板
 
-* 添加注册新用户的视图函数
+`/templates/auth/register.html`
+
+````html
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Flasky - Register{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Register</h1>
+</div>
+<div class="col-md-4">
+    {{ wtf.quick_form(form) }}
+</div>
+{% endblock %}
+````
+
+##### 3. 添加到注册页面的链接
+
+````html
+<div class="col-md-4">
+    {{ wtf.quick_form(form) }}
+    <p>
+        New user?
+        <a href="{{ url_for('auth.register') }}">
+            Click here to register
+        </a>
+    </p>
+</div>
+````
+
+##### 4. 添加注册新用户的视图函数
+
+````python
+@auth.route('/register', methods=['GET', 'POST'])
+def register():
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(email=form.email.data,
+                    username=form.username.data,
+                    password=form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('You can now login.')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/register.html', form=form)
+````
 
 #### 8.6 确认账户
 
@@ -1250,6 +1448,29 @@ url_prefix参数 --> 蓝本中定义的路由都会加上指定前缀
 
 * 生成带有用户id加密签名的链接
 * 用户点击链接解出id，确认id后进行认证
+
+示例：
+
+使用 itsdangerous 包生成包含用户 id 的安全令牌：
+
+```shell
+(venv) $ python manage.py shell
+>>> from manage import app
+>>> from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+>>> s = Serializer(app.config['SECRET_KEY'], expires_in = 3600)
+>>> token = s.dumps({ 'confirm': 23 })
+>>> token
+'eyJhbGciOiJIUzI1NiIsImV4cCI6MTM4MTcxODU1OCwiaWF0IjoxMzgxNzE0OTU4fQ.ey ...'
+>>> data = s.loads(token)
+>>> data
+{u'confirm': 23}
+```
+
+将这种生成和检验令牌的功能可添加到 User 模型中
+
+`app/models.py`:确认用户账户
+
+```python
 
 **2. 发送确认邮件**
 
