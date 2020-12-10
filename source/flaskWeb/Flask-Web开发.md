@@ -1484,7 +1484,7 @@ def register():
 
 改进Role模型
 
-```python
+​```python
 class Role(db.Model):
  __tablename__ = 'roles'
  id = db.Column(db.Integer, primary_key=True)

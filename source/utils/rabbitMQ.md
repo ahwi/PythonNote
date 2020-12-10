@@ -677,7 +677,11 @@ print("fib(4) is %r" % result)
 
   异常
 
+## 获取队列的数量
 
+需要获取队列的数量，控制生成者是否进行生产
+
+参考:`https://stackoverflow.com/questions/16691161/getting-number-of-messages-in-a-rabbitmq-queue`
 
 
 
