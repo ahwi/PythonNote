@@ -1471,10 +1471,123 @@ def register():
 `app/models.py`:确认用户账户
 
 ```python
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+from flask import current_app
+from . import db
+
+
+class User(UserMixin, db.Model):
+    # ...
+    confirmed = db.Column(db.Boolean, default=False)
+    
+    def generate_confirmation_token(self, expiration=3600):
+        s = Serializer(current_app.config['SECRET_KEY'], expiration)
+        return s.dumps({'confirm': self.id})
+
+    def confirm(self, token):
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token)
+        except:
+            return False
+        if data.get('confirm') != self.id:
+            return False
+        self.confirmed = True
+        db.session.add(self)
+        return True
+```
 
 **2. 发送确认邮件**
 
+**在注册路由中添加发送确认邮件的代码：**
 
+`app/auth/views.py`：能发送确认邮件的注册路由
+
+```python
+from ..email import send_email
+
+@auth.route('/register', methods=['GET', 'POST'])
+def register():
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        # ...
+        db.session.add(user)
+        db.session.commit()
+        token = user.generate_confirmation_token()
+        send_email(user.email,
+                   'Confirm Yor account',
+                   'auth/email/confirm',
+                   user=user,
+                   token=token)
+        flash('A confirmation email has been sent to you by email.')
+        return redirect(url_for('main.index'))
+    return render_template('auth/register.html', form=form)
+```
+
+**确认账户的视图函数：**
+
+`app/auth/views.py`确认用户的账户
+
+```python
+@auth.route('/confirm/<token>')
+@login_required
+def confirm(token):
+    if current_user.confirmed:
+        return redirect(url_for('main.index'))
+    if current_user.confirm(token):
+        flash('You have confirmed your account. Thanks!')
+    else:
+        flash('The confirmation link is invalid or has expired.')
+    return redirect(url_for('main.index'))
+```
+
+* `login_required`修饰器会保护这个路由，用户点击确认邮件中的链接后，要先登录，然后才能执行这个视图函数
+
+**添加对未确认用户的处理：**
+
+每个程序都可用决定用户确认账户之前可用做哪些操作，比如，允许未确认的用户登录，但只显示一个页面，在这个页面要求用户在获取权限之前先确认账户。可用使用`before_app_request`修饰器来解决这个问题。
+
+`app/auth/views.py`在before_app_request处理程序中过滤未确认的账户
+
+```python
+@auth.before_app_request
+def before_request():
+    if current_user.is_authenticated \
+            and not current_user.confirmed \
+            and request.endpoint \
+            and request.blueprint != 'auth' \
+            and request.endpoint != 'static':
+        return redirect(url_for('auth.unconfirmed'))
+```
+
+同时满足以下3个条件时，`before_app_request`处理程序才会拦截请求
+
+* 用户已登录（current_user.is_authenticated()必须返回True）
+* 用户的账户还未确认
+* 请求的端点（使用request.endpoint获取）不在认证蓝本中。访问认证路由要获取权限，因为这些路由的作用时让用户确认账户或执行其他账户管理操作
+
+显示给未确认用户的页面需要提供一个重新发送账户确认邮件的链接
+
+`app/auth/views.py`重新发送账户确认邮件
+
+```python
+@auth.route('/confirm')
+@login_required
+def resend_confirmation():
+    token = current_user.generate_confirmation_token()
+    send_email(current_user.email, 'Confirm Your Account',
+               'auth/email/confirm', user=current_user, token=token)
+    flash('A new confirmation email has been sent to you by email.')
+    return redirect(url_for('main.index'))
+```
+
+#### 8.7 管理账户
+
+可以添加一些扩展功能
+
+* 修改密码
+* 重设密码
+* 修改电子邮件地址
 
 ### 第9章 用户角色
 
@@ -1482,9 +1595,9 @@ def register():
 
 #### 9.1 角色在数据库中的表示
 
-改进Role模型
+**改进Role模型**
 
-​```python
+```python
 class Role(db.Model):
  __tablename__ = 'roles'
  id = db.Column(db.Integer, primary_key=True)
@@ -1496,13 +1609,34 @@ class Role(db.Model):
 
 添加两个字段：
 
-* default：默认角色的字段值为True
+* default：只有默认角色的default字段要设置为True，其他都设置为Flase。用户注册时，其角色会被设置为默认角色。
 
 * permissions: 权限，值是一个整数，各个操作都对应一个标志位
 
   ![1603789360424](assets/1603789360424.png)
 
-在数据库中创建角色：
+**权限与角色**
+
+表9-1的权限可以使用下面的代码表示：
+
+`app/models.py`:权限常量
+
+```python
+class Permission:
+    FOLLOW = 0X01
+    COMMENT = 0X02
+    WRITE_ARTICLES = 0X04
+    MODERATE_COMMENTS = 0X08
+    ADMINISTER = 0X80
+```
+
+表 9-2列出了要支持的用户角色以及定义角色使用的权限位
+
+![1607830344781](assets/1607830344781.png)
+
+将角色添加到代码中：
+
+在`Role`类中添加一个类方法，实现在数据库中创建角色：
 
 ```python
 class Role(db.Model):
@@ -1523,10 +1657,10 @@ class Role(db.Model):
             role = Role.query.filter_by(name=r).first()
             if role is None:
                 role = Role(name=r)
-                role.permissions = roles[r][0]
-                role.default = roles[r][1]
-                db.session.add(role)
-                db.session.commit()
+            role.permissions = roles[r][0]
+            role.default = roles[r][1]
+            db.session.add(role)
+            db.session.commit()
 ```
 
 `insert_roles()`函数，数据库有该账户则更新，没有则插入
@@ -1545,12 +1679,16 @@ class User(UserMixin, db.Model):
                 self.role = Role.query.filter_by(permissions=0xff).first()
             if self.role is None:
                 self.role = Role.query.filter_by(default=True).first()
-                    # ...
+    # ...
 ```
+
+
 
 #### 9.3 角色验证
 
 在`User`模型和`AnonymousUser`模型中添加一个辅助方法，检查是否有指定的权限
+
+`app/models.py`
 
 ```python
 from flask.ext.login import UserMixin, AnonymousUserMixin
@@ -1569,7 +1707,12 @@ class AnonymousUser(AnonymousUserMixin):
 login_manager.anonymous_user = AnonymousUser
 ```
 
+* 使用`can()`方法来判断角色的权限
+* 定义了`AnonymousUser`类，用来保持一致性，将其设置为用户未登录时的`current_user`的值，这样程序不用先检查用户是否登录，就能自由的调用`current_user.can()`和`current_user.is_admnistrator()`
+
 自定义装饰器，让视图函数只对具有特定权限的用户开放
+
+`app/decorators.py`:检查用户权限的自定义修饰器
 
 ```python
 from functools import wraps
