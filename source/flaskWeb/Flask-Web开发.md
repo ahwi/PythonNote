@@ -1876,6 +1876,8 @@ def before_request():
 
 * 资料编辑表单
 
+  `app/main/forms.py`：资料编辑表单
+
   ```python
   class EditProfileForm(Form):
       name = StringField('Real name', validators=[Length(0, 64)])
@@ -1885,6 +1887,8 @@ def before_request():
   ```
 
 * 资料编辑路由
+
+  `app/main/views.py`：资料编辑路由
 
   ```python
   @main.route('/edit-profile', methods=['GET', 'POST'])
@@ -1905,6 +1909,8 @@ def before_request():
   ```
 
 * 在用户资料页面中添加一个编辑页面的链接
+
+  `app/templates/user.html`：资料编辑的链接
 
   ```html
   {% if user == current_user %}
