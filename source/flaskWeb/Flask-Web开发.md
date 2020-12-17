@@ -1926,6 +1926,8 @@ def before_request():
 
 * 管理员使用的资料编辑表单
 
+  `app/main/forms.py`：管理员使用的资料编辑表单
+
   ```python
   class EditProfileAdminForm(Form):
       email = StringField('Email', validators=[Required(), Length(1, 64),
@@ -1957,6 +1959,8 @@ def before_request():
 
 * 管理员的资料编辑路由
 
+  `app/main/views.py`：管理员的资料编辑路由
+
   ```python
   @main.route('/edit-profile/<int:id>', methods=['GET', 'POST'])
   @login_required
@@ -1986,6 +1990,8 @@ def before_request():
   ```
 
 * 在用户资料页面添加链接按钮
+
+  `app/templates/user.html`：管理员是哦那个的资料编辑链接
 
   ```html
   {% if current_user.is_administrator() %}
