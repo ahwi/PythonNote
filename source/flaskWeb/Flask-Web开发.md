@@ -1770,8 +1770,11 @@ def inject_permissions():
 
 添加一些关于用户的其他信息，扩充`User`模型
 
+`app/models.py`：用户信息字段
+
 ```python
 class User(UserMixin, db.Model):
+    # ...
     name = db.Column(db.String(64))
     location = db.Column(db.String(64))
     about_me = db.Column(db.Text())
@@ -1780,6 +1783,8 @@ class User(UserMixin, db.Model):
 ```
 
 刷新用户的最后访问时间
+
+`app/models.py`
 
 ```python
 class User(UserMixin, db.Model):
@@ -1790,6 +1795,8 @@ class User(UserMixin, db.Model):
 ```
 
 在每次请求前运行`ping`, 使用`auth`蓝本中的`before_app_request`进行修饰
+
+`app/auth/views.py`：更新已登录用户的访问时间
 
 ```python
 @auth.before_app_request
@@ -1807,6 +1814,8 @@ def before_request():
 
 * 添加资料页面的路由
 
+  `app/main/views.py`
+
   ```python
   @main.route('/user/<username>')
   def user(username):
@@ -1817,6 +1826,8 @@ def before_request():
   ```
 
 * 添加用户资料页面的模板
+
+  `app/templates/user.html`
 
   ```html
   {% block page_content %}
@@ -1845,6 +1856,8 @@ def before_request():
   ```
 
 * 添加快捷访问链接
+
+  `app/templates/base.html`
 
   ```html
   {% if current_user.is_authenticated() %}

@@ -1,0 +1,9 @@
+code/flask/chapter10/10.1/venv
+
+# Python:
+*.py[cod]
+*.so
+*.egg
+*.egg-info
+__pychache__
+idea
