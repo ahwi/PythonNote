@@ -647,7 +647,7 @@ print(id(a), id(b))
 * 待适配的类（Adaptee）
 * 适配器（Adapter）
 
-适用场景：
+**适用场景：**
 
 * 想使用一个已经存在的类，而它的接口不符合你的要求
 * （对象适配器）想使用一些已经存在的子类，但不可能对每一个都进行子类化以匹配它们的接口。对象适配器可以适配它的父类接口。
@@ -827,6 +827,271 @@ shape2.draw()
 * 叶子组件（Leaf）
 * 复合组件（Composite）
 * 客户端（Client）
+
+**使用场景：**
+
+* 表示对象的“部分-整体”层次结构（特别是结构是递归的）
+* 希望用户忽略组合对象与单个对象的不同，用户统一地使用组合结构中的所有对象
+
+**优点：**
+
+* 定义了包含对象和组合对象的类层次结构
+* 简化客户端代码，即客户端可以一致地使用组合和单个对象
+* 更容易增加新类型的组件
+
+**示例：**
+
+```python
+from abc import ABCMeta, abstractmethod
+
+
+# 抽象组件
+class Graphic(metaclass=ABCMeta):
+    @abstractmethod
+    def draw(self):
+        pass
+
+
+# 叶子组件
+class Point(Graphic):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    
+    def __str__(self):
+        return "点(%s, %s)" % (self.x, self.y)
+
+    def draw(self):
+        print(str(self))
+
+
+# 叶子组件
+class Line(Graphic):
+    def __init__(self, p1, p2):
+        self.p1 = p1
+        self.p2 = p2
+    
+    def __str__(self):
+        return "线段[%s, %s]" % (self.p1, self.p2)
+
+    def draw(self):
+        print(str(self))
+
+
+# 复合组件
+class Picture(Graphic):
+    def __init__(self, iterable):
+        self.children = []
+        for g in iterable:
+            self.add(g)
+
+    def add(self, graphic):
+        self.children.append(graphic)
+
+    def draw(self):
+        print('---------复合图形----------')
+        for g in self.children:
+            g.draw()
+        print('---------复合图形----------')
+
+
+def main():
+    p1 = Point(2, 3)
+    l1 = Line(Point(3, 4), Point(6, 7))
+    l2 = Line(Point(1, 5), Point(2, 8))
+    pic1 = Picture([p1, l1, l2])
+
+    p2 = Point(4, 4)
+    l3 = Line(Point(1, 1), Point(0, 0))
+    pic2 = Picture([p1, l3])
+
+    pic = Picture([pic1, pic2])
+    pic.draw()
+
+if __name__ == "__main__":
+    main()
+
+```
+
+
+
+#### 11. 外观模式
+
+**内容：**
+
+为子系统中的一组接口提供一个一致的界面，外观模式定义了一个高层接口，这个接口使得这一子系统更加容易使用。
+
+**角色：**
+
+* 外观（facade）
+* 子系统类（subsystem classes）
+
+**优点：**
+
+* 减少系统相互依赖
+* 提高了灵活性
+* 提高了安全性
+
+**示例：**
+
+```python
+
+
+class CPU:
+    def run(self):
+        print("CPU开始运行")
+
+    def stop(self):
+        print("CPU停止运行")
+
+
+class Disk:
+    def run(self):
+        print("硬盘开始工作")
+
+    def stop(self):
+        print("硬盘停止工作")
+
+
+class Memory:
+    def run(self):
+        print("内存通电")
+
+    def stop(self):
+        print("内存断电")
+
+
+class Computer:
+    def __init__(self):
+        self.cpu = CPU()
+        self.disk = Disk()
+        self.memory = Memory()
+
+    def run(self):
+        self.cpu.run()
+        self.disk.run()
+        self.memory.run()
+
+    def stop(self):
+        self.cpu.stop()
+        self.disk.stop()
+        self.memory.stop()
+
+# client
+computer = Computer()
+computer.run()
+computer.stop()
+```
+
+#### 12. 代理模式
+
+**内容：**
+
+为其他对象提供一种代理以控制对这个对象的访问
+
+**应用场景：**
+
+* 远程代理：为远程的对象提供代理
+* 虚代理：根据需要创建很大的对象
+* 保护代理：控制对原始对象的访问，用于对象有不同访问权限时
+
+**角色：**
+
+* 抽象实体（Subject）
+* 实体（RealSubject）
+* 代理（Proxy）
+
+**优点：**
+
+* 远程代理：可以隐藏对象位于远程地址空间的事实
+* 虚代理：可以进行优化，例如根据需要创建对象
+* 保护代理：允许在访问一个对象时有一些附件的内务处理
+
+**示例：**
+
+```python
+from abc import ABCMeta, abstractmethod
+
+
+class Subject(metaclass=ABCMeta):
+    @abstractmethod
+    def get_content(self):
+        pass
+
+    @abstractmethod
+    def set_content(self):
+        pass
+
+
+class RealSubject(Subject):
+    def __init__(self, filename):
+        self.filename = filename
+        f = open(filename, 'r')
+        self.content = f.read()
+        f.close()
+
+    def get_content(self):
+        return self.content
+
+    def set_content(self, content):
+        f = open(self.filename, 'w')
+        f.write(content)
+        f.close()
+
+
+# subj = RealSubject('test.txt')
+# subj.get_content()
+
+
+"""
+代理：在读取的时候才去打开文件
+"""
+class VirtualProxy(Subject):
+    def __init__(self, filename):
+        self.filename = filename
+        self.subj = None
+
+    def get_content(self):
+        if not self.subj:
+            self.subj = RealSubject(self.filename)
+        return self.subj.get_content()
+
+    def set_content(self):
+        if not self.subj:
+            self.subj = RealSubject(self.filename)
+        return self.subj.set_content()
+
+
+"""
+保护代理
+"""
+class ProtectedProxy(Subject):
+    def __init__(self, filename):
+        self.subj = RealSubject(filename)
+    
+    def get_content(self):
+        return self.subj.get_content()
+
+    def set_content(self, content):
+        raise PermissionError("无写入权限")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
