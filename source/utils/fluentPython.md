@@ -853,6 +853,40 @@ b'd\x00\x00\x00\x00\x00\x00\x08@\x00\x00\x00\x00\x00\x00\x10@'
         return cls(*memv)
 ```
 
+#### 9.4 classmethod与staticmethod
+
+* classmethod装饰器
+
+  * **定义操作类，而不是操作实例的方法。**classmethod改变了调用方法的方式，因此类方法的第一个参数是类本身，而不是实例。
+
+  * classmethod最常见的用途是定义备选构造方法
+
+* staticmethod装饰器
+
+  * **也会改变方法的调用方式，但是第一个参数不是特殊的值**
+  * 静态方法只是普通的函数，只是碰巧在类的定义体中，而不是在模块层定义
+
+**比较classmethod和staticmethod的行为**
+
+```python
+>>> class Demo:
+...     @classmethod
+...     def klassmeth(*args):
+...         return args #返回全部位置参数
+...     @staticmethod
+...     def statmeth(*args):
+...         return args #返回全部位置参数
+...
+>>> Demo.klassmeth()
+(<class '__main__.Demo'>,)
+>>> Demo.klassmeth('spam') # 不管怎么调用，Demo.klassmeth的第一个参数始终是Demo类
+(<class '__main__.Demo'>, 'spam')
+>>> Demo.statmeth() # Demo.statmeth的行为和普通的函数相似
+()
+>>> Demo.statmeth('spam')
+('spam',)
+```
+
 
 
 
