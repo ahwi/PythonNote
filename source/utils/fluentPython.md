@@ -746,6 +746,28 @@ True
 
 ### 第9章 符合Python风格的对象
 
+#### 9.1 对象表示形式
+
+在Python中，获取对象的**字符串表示形式**的标准方式
+
+* repr()
+      以便于开发者理解的方式返回对象的字符串表示形式
+* str()
+      以便于用户理解的方式返回对象的字符串表示形式
+
+**对象的其他表示形式：**
+
+* `__bytes__`
+      bytes()函数调用它获 取对象的字节序列表示形式
+* `__format__`
+      会被format()函数和str.format()方法调用，使用特殊的格式代码显示对象的字符串表示形式
+
+在Python3中:
+
+* `__repr__`、`__str__`和`__format__`都必须返回Unicode字符串（str类型）
+
+* `__bytes__`方法返回字节序列（bytes类型）
+
 #### 9.2 再谈向量类
 
 使用`Vector2d`类来说明**用于生成对象表现形式的众多方法**
@@ -886,6 +908,238 @@ b'd\x00\x00\x00\x00\x00\x00\x08@\x00\x00\x00\x00\x00\x00\x10@'
 >>> Demo.statmeth('spam')
 ('spam',)
 ```
+
+#### 9.5 格式化显示
+
+**内置`format()`函数和`str.format()`方法把各个类型的格式化方式委托给相应的`.__format__(format_spec)`方法。**
+
+format_spec是格式说明符，它是：
+
+* `format(my_obj, format_spec)`的第二个参数
+* `str.format()`方法的格式化字符串，`{}`里代换字段中冒号后面的部分
+
+示例：
+
+```python
+>>> brl = 1/2.43
+>>> brl
+0.4115226337448559
+>>> format(brl, '0.4f') # 格式说明符是'0.4f'
+'0.4115'
+>>> '1 BRL = {rate:0.2f} USD'.format(rate=brl) # 格式说明符是'0.2f'，代换字段中的'rate'子串是字段名称，与格式说明符无关，但是它决定把.format()的哪个参数传给代换字段
+'1 BRL = 0.41 USD'
+```
+
+**格式规范微语言**
+
+格式说明符使用的表示法叫格式规范微语言
+
+* 格式微语言为一些内置类型提供了专用的表示代码。
+
+    比如，b和x分别表示二进制和十六进制的int类型，f表示小数形式的float类型，而%表示百分数形式
+    
+    ```python
+    >>> format(42, 'b')
+    '101010'
+    >>> format(2/3, '.1%')
+    '66.7%'
+    ```
+
+* 格式微语言是可扩展的，因为各个类可以自行决定如何解释`format_spac`参数
+
+  例如：datetime模块中的类，它们的`__format__`方法使用的格式代码与`strftime()`函数一样，下面是内置的`format()`函数和`str.format()`方法的几个示例：
+
+  ```python
+  >>> from datetime import datetime
+  >>> now = datetime.now()
+  >>> format(now, '%H:%M:%S')
+  '18:44:02'
+  >>> "It's now {:%I:%M %p}".format(now)
+  "It's now 06:44 PM"
+  ```
+
+**实现自己的微语言**
+
+版本1：假设用户提供的格式说明符是用于格式化向量各个浮点数分量的，我们想达到的效果如下
+
+```python
+>>> v1 = Vector2d(3, 4)
+>>> format(v1)
+'(3.0, 4.0)'
+>>> format(v1, '.2f')
+'(3.00, 4.00)'
+>>> format(v1, '.3e')
+'(3.000e+00, 4.000e+00)'
+```
+
+需要实现`__format__`方法
+
+```python
+    def __format__(self, fmt_spec=''):
+        components = (format(c, fmt_spec) for c in self)
+        return '({}, {})'.format(*components)
+```
+
+版本2：在微语言中添加一个自定义的格式代码：如果格式说明符以'p'结尾，那么在极坐标中显示向量，即`<r, θ>`，其中r是模，θ（西塔）是弧度；其他部分（'p'之前的部分）像往常那样解释
+
+计算模用`__abs__`方法，计算角度用`angle`方法
+
+第二版本的代码如下：
+
+```python
+    def angle(self):
+        return math.atan2(self.y, self.x)
+
+    def __format__(self, fmt_spec=''):
+        if fmt_spec.endswith('p'):
+            fmt_spec = fmt_spec[:-1]
+            coords = (abs(self), self.angle())
+            outer_fmt = '<{}, {}>'
+        else:
+            coords = self
+            outer_fmt = '({}, {})'
+        components = (format(c, fmt_spec) for c in coords)
+        return '({}, {})'.format(*components)
+```
+
+调用结果如下：
+
+```python
+>>> format(Vector2d(1, 1), 'p')
+'(1.4142135623730951, 0.7853981633974483)'
+>>> format(Vector2d(1, 1), '.2ep')
+'(1.41e+00, 7.85e-01)'
+>>> format(Vector2d(1, 1), '0.5fp')
+'(1.41421, 0.78540)'
+```
+
+#### 9.6 可散列的Vector2d
+
+为了**把Vector2d变成可散列的**，需要实现三个方面：
+
+* 实现`__hash__`方法
+* 实现`__eq__`方法
+* 让向量不可变
+
+**1. 把Vector2d的x和y分量设为只读特性**
+
+```python
+class Vector2d:
+    typecode = 'd' # 类属性，在vector2d实例和字节序列之间转换时使用
+
+    def __init__(self, x, y):
+        self.__x = float(x)   # 把x和y转成浮点数，尽早捕获错误，以防调用Vector2d函数时传入不当参数
+        self.__y = float(y)
+
+    @property
+    def x(self):
+        return self.__x
+
+    @property
+    def y(self):
+        return self.__y
+    
+    def __iter__(self): # 需要读取x和y分量的方法可以保存不变，通过self.x和self.y读取公开特性，而不必读取私有属性
+        return (i for i in (self.x, self.y))
+```
+
+**2. 实现`__hash__`方法**
+
+根据特殊方法`__hash__`的文档，最好使用位运算符异或（^）混合各分量的散列值，这里也是这样实现
+
+```python
+    def __hash__(self):
+        return hash(self.x) ^ hash(self.y)
+```
+
+使用：
+
+```python
+>>> v1 = Vector2d(3, 4)
+>>> v2 = Vector2d(3, 4)
+>>> hash(v1), hash(v2)
+(7, 7)
+>>> id(v1), id(v2)
+(2936989912032, 2936988909464)
+```
+
+#### 9.8 使用`__slots__`类节省空间
+
+**1. Python中存储实例属性的方式**
+
+* 默认情况下，Python在各个实例中，使用`__dict__`的字典来存储实例属性，为了使底层的散列表提升访问速度，字典会消耗大量内存。
+
+* 如果要处理数百万个属性不多的实例，通过`__slots__`类属性，能节省大量内存，方法是让解释器在元组中存储实例属性，而不用字典
+  * 继承自超类的`__slots__`属性没有效果，Python只会使用各个类中定义的`__slots__`属性
+
+**2. 使用`__slots__`来存储实例属性**
+
+定义`__slots__`的方式是：创建一个类属性，使用`__slots__`这个名字，并把它的值设为一个字符串构成的可迭代对象，其中各个元素表示各个实例属性。推荐使用元组，因为这样定义的`__slots__`中所包含的信息不会改变
+
+示例：
+
+```python
+class Vector2d:
+    __slots__ = ('__x', '__y')
+    typecode = 'd'
+    
+    ....
+```
+
+**2. `__slots__`相关问题**
+
+* `__slots__`的副作用：
+
+  在类中定义`__slots__`属性之后，实例不能再有`__slots__`中所列名称之外的其他属性。这只是一个副作用，不是`__slots__`存在的真正原因。不要使用`__slots__`属性禁止类的用户新增实例属性。`__slots__`是用于优化，不是为了约束程序员。
+
+* “节省的内存也可能被再次吃掉”
+
+  如果把`__dict__`这个名称添加到`__slots__`中，实例会在元组中保存各个实例的属性，此外还支持动态创建属性，这些属性存储在常规的`__dict__`中
+
+* 弱引用的问题
+
+  为了让对象支持弱引用，必须有`__weakref__`属性，用户定义的类中默认就有`__weakref__`属性，可是如果类中定义了`__slots__`属性，而且想把实例作为弱引用的目标，那么需要把`__weakref__`添加到`__slots__`中
+
+#### 9.9 覆盖类属性
+
+**1. 类属性的作用：**
+
+* 类属性可以为实例属性提供默认值
+* 如果为不存在的实例属性赋值，会新建实例属性，同名类属性不受影响
+
+示例：
+
+```python
+>>> class Vector2d:
+...      typecode = 'd'
+...
+>>> v1 = Vector2d()
+>>> v1.typecode
+'d'
+>>> v1.typecode = 'f'
+>>> v1.typecode
+'f'
+>>> Vector2d().typecode
+'d'
+```
+
+**2. 修改类属性的值**
+
+* 在类上面直接修改，不能通过实例修改
+
+* 更符合Python风格的修改方法：类属性时公开的，因此会被子类继承，于是可以创建一个子类，只用于定制类的数据属性
+
+  示例：
+
+  ```python
+  >>> class ShortVector2d(Vector2d):
+  ...      typecode = 'f'
+  ...
+  ```
+
+  
+
+
 
 
 
