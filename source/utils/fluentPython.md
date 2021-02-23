@@ -1137,7 +1137,73 @@ class Vector2d:
   ...
   ```
 
-  
+
+### 第10章 序列的修改、散列和切片
+
+#### 10.1 Vector类：用户定义的序列类型
+
+我们将使用组合模式实现Vector类，而不使用继承。向量的分量存储在浮点数数组中，而且还将实现不可扁平序列所需的方法。
+
+#### 10.2 Vector类第1版：与Vector2d类兼容
+
+**1. `__init__`方法的参数**
+
+我们可以让`__init__`方法接受任意参数（通过`*args`）。但是，序列类型的构造方法最好接受可迭代的对象为参数，因为所有内置的序列类型都是这样做的。
+
+第1版Vector类的实现代码：
+
+```python
+from array import array
+import reprlib
+import math
+
+
+class Vector:
+    typecode = 'd'
+
+    def __init__(self, components):
+        """
+        self._components是“受保护的”实例属性，把Vector的分量保存在一个数组中
+        """
+        self._components = array(self.typecode, components)
+
+    def __iter__(self):
+        """
+        为了迭代，使用self._components构建一个迭代器
+        """
+        return iter(self._components)
+
+    def __repr__(self):
+        """
+        使用reprlib.repr()函数获取self._components的有限长度表示形式（如array('d', [0.0, 1.0, 2.0, 3.0, 4.0, ...])）
+        """
+        components = reprlib.repr(self._components)
+        components = components[components.find('['):-1]
+        return 'Vector({})'.format(components)
+
+    def __str__(self):
+        return str(tuple(self))
+
+    def __byte__(self):
+        return (bytes([ord(self.typecode)]) +
+                bytes(self._components))
+
+    def __eq__(self, other):
+        return tuple(self) == tuple(other)
+
+    def __abs__(self):
+        return math.sqrt(sum(x * x for x in self))
+
+    def __bool__(self):
+        return bool(abs(self))
+
+    @classmethod
+    def frombytes(cls, octets):
+        typecode = chr(octets[0])
+        memv = memoryview(octets[1:]).cast(typecode)
+        return cls(memv)
+
+```
 
 
 
