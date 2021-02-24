@@ -1137,7 +1137,6 @@ class Vector2d:
   ...
   ```
 
-
 ### 第10章 序列的修改、散列和切片
 
 #### 10.1 Vector类：用户定义的序列类型
@@ -1204,6 +1203,73 @@ class Vector:
         return cls(memv)
 
 ```
+
+#### 10.3 协议和鸭子类型
+
+**1. 协议和序列协议的概念**
+
+在Python中创建功能完善的序列类型无需使用继承，只需实现符合序列协议的方法。
+
+在面向对象编程中，**协议**是非正式的接口，只在文档中定义，在代码中不定义。例如，Python的序列协议只需要实现`__len__`和`__getitem__`两个方法。任何类只要实现了这两个方法，就能用在任何期待序列的地方。
+
+示例：
+
+```python
+import collections
+
+Card = collections.namedtuple('Card', ['rank', 'suit'])
+
+
+class FrenchDeck:
+    ranks = [str(n) for n in range(2, 11)] + list('JQKA')
+    suits = 'spades diamonds clubs hearts'.split()
+
+    def __init__(self):
+        self._cards = [Card(rank, suit) for suit in self.suits
+                              for rank in self.ranks]
+
+    def __len__(self):
+        return len(self._cards)
+
+    def __getitem__(self, position):
+        return self._cards[position]
+```
+
+FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协议。
+
+**协议是非正式的，没有强制力**，因此如果你知道类的具体使用场景，通常只需要实现一个协议的部分。例如，为了支持迭代，只需实现`__getitem__`方法，没必要提供 `__len__`方法。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
