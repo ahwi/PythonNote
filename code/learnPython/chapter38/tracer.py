@@ -1,3 +1,5 @@
+
+
 class tracer:
     def __init__(self, func):
         self.calls = 0
@@ -23,6 +25,7 @@ class wrapper:
         print(f"wrapper call ")
         return self.desc(self.subj, *args, **kwargs)
 
+
 @tracer
 def spam(a, b, c):
     print(a + b + c)
@@ -41,6 +44,7 @@ class Person:
     @tracer
     def lastName(self):
         return self.name.split()[-1]
+
 
 sue = Person("tome", 1)
 print(f"{sue}")
