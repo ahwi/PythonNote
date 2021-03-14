@@ -258,7 +258,7 @@ flask支持很多启动设置选项，但只能在脚本中作为参数传给`ap
 
 #### 3.1 Jinja2模板引擎
 
-新式最简单的`Jinja2`模板就是一个包含响应文本的文件
+形式最简单的`Jinja2`模板就是一个包含响应文本的文件
 
 如:
 
@@ -854,7 +854,7 @@ db = SQLAlchemy(app)
 
 #### 5.6 定义模型
 
-`Flask-SQLAlchemy`创建的数据库实例为模型提供了一个基类已经一系列辅助类和辅助函数，可用于定义模型的结构。
+`Flask-SQLAlchemy`创建的数据库实例为模型提供了一个基类以及一系列辅助类和辅助函数，可用于定义模型的结构。
 
 示例：定义了模型`Role`和`User`
 
@@ -895,11 +895,11 @@ roles表和users表是一种角色到用户的一对多关系，因为一个角�
 
 ```python
 class Role(db.Model):
- # ...
- users = db.relationship('User', backref='role')
+    # ...
+    users = db.relationship('User', backref='role')
 class User(db.Model):
- # ...
- role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+    # ...
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
 ```
 
 * 关系users表中的外键连接了两行，role_id为外键，传给`db.ForeignKey()`的参数`roles.id`表明，这列的值是roles表中行的id值
@@ -1089,25 +1089,25 @@ INFO [alembic.migration] Running upgrade None -> 1bc594146bb5, initial migration
 
 ```shell
 |-flasky
- |-app/
- |-templates/
- |-static/
- |-main/
- |-__init__.py
- |-errors.py
- |-forms.py
- |-views.py
- |-__init__.py
- |-email.py
- |-models.py
- |-migrations/
- |-tests/
- |-__init__.py
- |-test*.py
- |-venv/
- |-requirements.txt
- |-config.py
- |-manage.py
+	|-app/
+ 		|-templates/
+ 		|-static/
+ 		|-main/
+ 			|-__init__.py
+ 			|-errors.py
+ 			|-forms.py
+ 			|-views.py
+ 		|-__init__.py
+ 		|-email.py
+ 		|-models.py
+ 	|-migrations/
+ 	|-tests/
+ 		|-__init__.py
+ 		|-test*.py
+ 	|-venv/
+ 	|-requirements.txt
+ 	|-config.py
+ 	|-manage.py
 ```
 
 这种结构有 4 个顶级文件夹：

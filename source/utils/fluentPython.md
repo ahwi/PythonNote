@@ -2266,6 +2266,172 @@ bool, int, object
 
 与Tkinter相比，Django基于类的视图API是多重继承更好的示例。
 
+
+
+### 第13章 正确重载运算符
+
+这章重点介绍：
+
+* Python如何处理中缀运算符中不同类型的操作数
+* 使用鸭子类型或显示类型检查处理不同类型的操作数
+*  中缀运算符如何表明自己无法处理操作数
+*  众多比较运算符（如`>`、`<=`, '=='）的特殊行为
+*  增量赋值运算符（如`+=`）的默认处理方式和重载操作
+
+#### 13.1 运算符重载基础
+运算符重载会被滥用，因此Python添加了一些限制，做好了灵活性、可用性和安全性方面的平衡：
+
+* 不能重载内置类型的操作符
+* 不能新建运算符，只能重载现有的
+*  有些操作符不能重载，如is, and, or和not（但是位运算符|, &和~可以重载）
+
+#### 13.2 一元运算符
+
+**三个一元运算符及其特殊方法：**
+
+* - （`__neg__`）
+    一元取负运算符。如果x是-2，那么-x == 2
+* （`__pos__`）
+  一元取正运算符。通常，x == +x，但也有一些例外。
++ ~ （`__invert__`）
+    对整数按位取反，定义~x == -(x+1)。如果x是2，那么~x == -3
+
+在Python语言参考手册中也把内置的`abs()`函数列为一元操作符，它对应的特殊方法是`__abs__`
+
+**把一元运算符`-`、`+`添加到Vector类中**
+示例13-1 `vector_v6.py`：把一元运算符-和+添加到示例10-16中
+```python
+    def __abs__(self):
+        return math.sqrt(sum(x * x for x in self))
+
+	def __neg__(self):
+		return Vector(-x for x in self)
+	def __pos__(self):
+ 		return Vector(self)
+```
+
+**不实现`__invert__`方法，程序调用的错误信息**
+我们不打算实现`__invert__`方法，因此如果用户在Vector实例上尝试计算~v,Python会抛出TypeError，而且输出明确的错误消息，“bad operand type for unary ~:'Vector'”
+
+**x != +x 的特殊场景**
+大多数情况下x == +x，下面例举的两个特殊场景下，x != +x
+场景1：
+
+与`decimal.Decimal`类有关。如果x是Decimal实例，在算术运算符的上下文中创建，任何在不同的上下文中计算+x，如果精度变了，那么x != +x
+
+详细见P309的示例
+
+场景2：
+
+`collections.counter`类也会发生x != +x的情况，详细见P310
+
+#### 13.3 重载向量加法运算符`+`
+
+#### 
+
+**1. 为Vector添加`__add__`方法以支持加法运算符`+`**
+
+示例 13-4 `Vector.__add__`方法，第一版
+
+
+
+**2. 添加`__radd__`方法，以支持左操作数不是Vector之外的对象的情况**
+
+为了支持涉及不同类型的运算符，Python为中缀运算符特殊方法提供了特殊的分派机制。对表达式`a + b`来说，解释器会执行以下几步操作：
+
+* 如果a有`__add__`方法，而且返回值不是`NotImplemented`，调用`a.__add__(b)`，然后返回结果
+* 如果a没有`__add__`方法，或者调用`__add__`方法返回`NotImplemented`，检查b有没有`__radd__`方法，如果有，而且没有返回`NotImplemented`，调用`b.__radd__(a)`，然后返回结果
+* 如果b没有`__radd__`方法，或者调用`__radd__`方法返回`NotImplemented`，抛出`TypeError`，并在错误消息中指明操作数类型不支持
+
+注（`NotImplemented`和`NotImplementedError`是不一样的，前者是特殊的单例值，后者是一种异常）
+
+下面是解释器的操作流程图：
+
+![image-20210310203508739](assets/image-20210310203508739.png)
+
+示例 13-7 `Vector.__add__`和`__radd__`方法
+
+略
+
+**3. 增加对不支持类型的处理**
+
+为了遵守鸭子类型的精神，我们不能测试other操作数的类型，或者它的元素的类型。我们要捕获异常，然后返回`NotImplemented`。如果解释器还未反转操作数，那么它将尝试去做。如果反向方法返回`NotImplemented`，那么Python会抛出`TypeError`，并返回一个标准的错误消息，例如“unsupported operand type(s) for +: Vector and str”
+
+示例 13-10 `vector_v6.py`：+运算符方法，添加到vector_v5.py（见示例10-16）中
+
+```python
+略
+```
+
+#### 13.4 重载标量乘法运算符`*`
+
+Vector的积有两种
+
+* 标量积
+* 点积
+
+这里实现的是标量积
+
+**1. 实现最简单的`__mul__`和`__rmul___`方法**
+
+```python
+# 在Vector类中定义
+
+def __mul_(self, scalar):
+    return Vector(n * scalar for n in self)
+
+def __rmul__(self, scalar):
+    return self * scalar
+```
+
+上述方法在提供不兼容的操作数时会出问题。
+
+**2. 使用白鹅类型来检查不兼容的操作数**
+
+```python
+# 在Vector类中定义
+
+def __mul_(self, scalar):
+    if isinstance(scalar, numbers.Real):
+        return Vecotr(n * scalar for n in self)
+    else:
+    	return NotImplemented
+
+def __rmul__(self, scalar):
+    return self * scalar
+```
+
+
+
+**3. 我们讲解了编写`+`和`*`中缀运算符最常用的模式。 对表13-1中列出的所有运算符都适用**
+
+![image-20210310210519973](assets/image-20210310210519973.png)
+
+#### 13.5 众多比较运算符
+
+**1. 众多比较运算符和前文运算符的区别**
+
+Python解释器对众多比较运算符（==、!=、>、<、>=、<=）的处理与前文类似，不过在两个方面有重大区别：
+
+* 正向和方向调用使用的是同一系列方法。这方面的规划如表13-2所示。例如，对==来说，正向和反向调用都是`__eq__`方法，只是把参数对调了；而正向的`__gt__`方法调用的是方向的`__lt__`方法，并把参数对调
+* 对`==`和`!=`来说，如果反向调用失败，Python会比较对象的ID，而不抛出TypeError。
+
+表13-2：众多比较运算符：正向方法返回`NotImplemented`的话，调用反向方法
+
+![image-20210310214614377](assets/image-20210310214614377.png)
+
+**2. 改进`vector.__eq__`方法的行为**
+
+略
+
+#### 13.6 增量赋值运算符
+
+* 增量运算符不会修改不可变目标，而是新建实例，然后重新绑定
+* 如果一个类没有实现表13-1列出的就地运算符，增量赋值运算符只是语法糖：a += b的作用与a = a + b完全一样。对不可变类型来说，这是预期的行为，而且，如果定义了`__add__`方法的话，不用编写额外的代码，+=就能使用。
+* 如果实现了就地运算符方法，例如`__iadd__`，计算a += b的结果时会调用就地运算符方法。这种运算符的名称表明，它们会就地修改左操作数，而不会创建新对象作为结果。
+* 对不可变类型来说，一定不能实现就地特殊方法。
+* 对序列类型来说，`+`通常要求两个操作数属于同一类型，而`+=`的右操作数往往可以是任何可迭代对象
+
 ## 第五部分 流畅控制
 
 ### 第14章 可迭代的对象、迭代器和生成器
@@ -2280,7 +2446,38 @@ bool, int, object
   * 迭代器用于从集合中取出元素
   * 生成器用于“凭空”生成元素
 
-**iter函数**
+#### 14.1 Sentence类第1版：单词序列 
+
+实现一个Sentence类，以此打开探索可迭代对象的旅程。
+
+第1版要实现序列协议，这个类的对象可以迭代，因为所有序列都可以迭代。
+
+示例14-1 `sentence.py`：把句子划分为单词序列
+
+```python
+import re
+import reprlib
+
+RE_WORD = re.compile('\w+')
+
+
+class Sentence:
+    
+    def __init__(self, text):
+        self.text = text
+        self.words = RE_WORD.findall(text)
+    
+    def __getitem__(self, index):
+        return self.words[index]
+    
+    def __len__(self):
+        return len(self.words)
+    
+    def __repr__(self):
+        return 'Sentence(%s)' % reprlib.repr(self.text)
+```
+
+**序列可以迭代的原因：iter函数**
 
 解释器需要迭代对象x时，会自动调用iter(x)
 
@@ -2305,7 +2502,7 @@ bool, int, object
 
 * 直接使用`iter(x)`，如果对象不可迭代会抛`TypeError:'C' object is not iterable`的异常
 
-序列可以迭代，因为它实现了`__getitem__`方法
+任何Python序列可以迭代，因为它们都实现了`__getitem__`方法。（其实标准库的序列也都实现了`__iter__`方法）
 
 #### 14.2 可迭代对象与迭代器的对比
 
@@ -2313,6 +2510,37 @@ bool, int, object
 
 * python从可迭代的对象中获取迭代器
 * 使用`iter`内置函数可以获取迭代器的对象
+
+示例：
+
+使用for循环迭代一个字符串。字符串'ABC'是可迭代的对象，背后是有迭代器的，只不过我们看不到：
+
+```python
+>>> s = 'ABC'
+>>> for char in s:
+...     print(char)
+...
+A
+B
+C
+```
+
+如果没有for语句，不得不使用while循环模拟：
+
+```python
+>>> s = 'ABC'
+>>> it = iter(s) # 使用可迭代的对象构建迭代器it
+>>> while True:
+...     try:
+...         print(next(it)) # 不在再迭代器上调用next函数，获取下一个字符
+...     except StopIteration: # 如果没有字符了，迭代器会抛出StopIteration异常
+...         del it  #释放对it的引用，即废弃迭代器对象
+...         break   #退出循环
+...
+A
+B
+C
+```
 
 **标准的迭代器接口有两个方法：**
 
@@ -2322,7 +2550,7 @@ bool, int, object
 
 * `__iter__`:
 
-  返回self，以便在应该使用可迭代对象（这里的可迭代对象应该指迭代器对象，跟可迭代的对象不是同一个东西）的地方使用迭代器，例如在for循环中
+  返回self，以便在应该使用可迭代对象（这里的可迭代对象应该指迭代器对象本身，跟可迭代的对象不是同一个东西）的地方使用迭代器，例如在for循环中
 
 **迭代器接口的类关系：**
 
@@ -2330,7 +2558,7 @@ bool, int, object
 
 * `Iterable`和`Iterator`的关系
 
-  ![1596853787233](assets/1596853787233.png)
+  ![image-20210313105849814](assets/image-20210313105849814.png)
 
 **`Iterator`源码 ：**
 
@@ -2351,7 +2579,7 @@ class Iterator(Iterable):
         return NotImplemented
 ```
 
-检查对象x是否为迭代器最好的方式是调用`isinstance(x, abc.Iterator)`，得益于`Iterator.__subclasshook__`方法，即使对象x所属的类不是`Iterator`类的真是子类或虚拟子类，也能这样检查
+检查对象x是否为迭代器最好的方式是调用`isinstance(x, abc.Iterator)`，得益于`Iterator.__subclasshook__`方法，即使对象x所属的类不是`Iterator`类的真实子类或虚拟子类，也能这样检查。
 
 **迭代器的定义：**
 
@@ -2420,8 +2648,8 @@ if __name__ == '__main__':
 * 混淆了二者，比如想把Sentence变成迭代器
 
 * 两者的区别：
-  * 迭代器对象有个`__iter__`方法，每次都实例化一个新的迭代器
-  * 迭代器要实现`__next__`方法，返回单个元素，实现`__iter__`方法，返回迭代器本身
+  * 可迭代的对象有个`__iter__`方法，每次都实例化一个新的迭代器
+  * 迭代器要实现`__next__`方法，返回单个元素，还要实现`__iter__`方法，返回迭代器本身
 
 * 在可迭代的对象加入`__next__`方法是一种糟糕的想法，这是一种常见的反模式，违反了迭代器模式的用途
 
@@ -2490,6 +2718,58 @@ def __iter__(self):
 * 生成器表达式是创建生成器的简洁语法，无需先定义函数再调用
 * 生成器函数可以使用多个语句实现复杂的逻辑，也可以作为协程使用
 
+#### 14.8 另一个示例：等差数列生成器
+
+本节用不同的方法实现：用于生成不同类型的有穷等差数列的生成器
+
+示例 14-10 `ArithmeticProgression`类
+
+```python
+class ArithmeticProgression:
+    def __init__(self, begin, step, end=None):
+        self.begin = begin
+        self.step = step
+        self.end = end
+    
+    def __iter__(self):
+        result = type(self.begin + self.step)(self.begin)
+        forever = self.end is None
+        index = 0
+        while forever or result < self.end:
+            yield result
+            index += 1
+            result = self.begin + self.step * index
+```
+
+示例 14-12 `aritprog_gen`生成器函数
+
+```python
+def aritprog_gen(begin, step, end=None):
+    result = type(begin, step)(begin)
+    forver = end is None
+    index = 0
+    while forver or result < end:
+        yield result
+        index += 1
+        result = begin + step * index
+```
+
+示例 14-13 `aritprog_v3.py`：与前面的aritprog_gen函数作用相同
+
+```python
+import itertools
+
+
+def aritprog_gen(begin, step, end=None):
+    first = type(begin, step)(begin)
+    ap_gen = itertools.count(first, step)
+    if end is not None:
+        ap_gen = itertools.takewhile(lambda n: n < end, ap_gen)
+    return ap_gen
+```
+
+三个版本功能一样，不过可以对比一下如何用更简洁的方式来实现。
+
 #### 14.9 标准库中的生成器函数
 
 略
@@ -2527,6 +2807,11 @@ def __iter__(self):
   # out: ["A","B","C",0,1,2]
   ```
 
+#### 14.11 可迭代的归约函数
+
+表14-6中的函数都接受一个可迭代的对象，然后返回单个结果。
+
+表略
 
 #### 14.12 深入分析iter函数
 
@@ -2545,17 +2830,41 @@ def __iter__(self):
       print(roll)
   ```
 
-
-
 #### 14.13案例分析：在数据库转换工具
 
-略
+本节介绍了一个数据库转换工具的实现方式，以此来说明如何使用生成器函数解耦读写逻辑。
+
+#### 14.4 把生成器当作协程
+
+Python 2.5实现了`.send()`方法
+
+`.send()`方法的作用：
+
+* 与`.next()`方法一样，使生成器前进到下一个yield语句
+* `.send()`方法允许在客户代码和生成器之间交换数据。即：把`.send()`方法的参数，会成为生成器函数定义体中对应的yield表达式的值。
 
 ### 第15章 上下文管理器和else块
 
+本章介绍：
+
+* with语句和上下文管理器
+* for、while和try语句的else子句
+
 #### 15.1 先做这个，再做那个：if语句之外的else块
 
-for while 语句后面的else子句
+else 子句的行为如下：
+
+* for
+
+  仅当for循环运行完毕时（即for循环没有被break语句中止）才允许else块
+
+* while
+
+  仅当while循环因为条件为假值而退出时（即while循环没有被break语句中止）才允许else块
+
+* try
+
+  仅当try块中没有异常抛出时才运行else块。
 
 #### 15.2 上下文管理器和with块
 
@@ -2563,24 +2872,35 @@ for while 语句后面的else子句
 
 * with语句的目的是简化try/finally模式
 * 上下文管理器协议包含`__enter__`和`__exit__`两个方法。
-  * `with`语句开始运行时，会再上下文管理器对象上调用`__enter__`方法
-  * `with`语句运行结束后，会在上下文管理器对象上调用`__exit__`方法，以次扮演finally子句的角色
+  * `with`语句开始运行时，会在上下文管理器对象上调用`__enter__`方法
+  * `with`语句运行结束后，会在上下文管理器对象上调用`__exit__`方法，以此扮演finally子句的角色
 
-例程1：with的使用方法：
+示例 15-1 演示把文件对象当作上下文管理器使用
 
 ```python
-with open("mirror.py") as fp:
-    src = fp.read(60)
+>>> with open("mirror.py") as fp:
+...    src = fp.read(60)
+...
+>>> len(src)
+60
+>>> fp
+<_io.TextIOWrapper name='mirror.py' mode='r' encoding='UTF-8'>
+>>> fp.closed, fp.encoding
+(True, 'UTF-8')
+>>> fp.read(60)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ValueError: I/O operation on closed file.
 ```
 
 注：执行with后面的表达式得到的结果是上下文管理器对象，不过，把值绑定到目标变量上（as子句）是在上下文管理器对象上调用`__enter__`方法的结果
 
 as子句是可选的
 
-例程2：上下文管理器类LookingClass上下文管理器的代码
+示例 15-3：lookingGlass.py`：LookingGlass上下文管理器类的代码
 
 ```python
-class LookingClass:
+class LookingGlass:
     def __enter__(self):
         import sys
         self.original_write = sys.stdout.write
@@ -2595,10 +2915,191 @@ class LookingClass:
         sys.stdout.write = self.original_write
         if exc_type is ZeroDivisionError:
             print('Please DO NOT divide by zero!')
-            return True
+            return True # # 如果有异常发生，__exit__方法True之外的值，with块中的异常会向上冒泡
 ```
 
+* 解释器调用`__enter__`方法时，除了隐式的self之外，不会传入任何参数。
 
+* 传给`__exit__`方法的三个参数：
+
+  * exc_type
+
+    异常类（例如ZeroDivisionError）
+
+  * exc_value
+
+    异常实例。有时会有参数传递给异常构造方法，例如错误消息，这些参数可以使用`exc_value.args`获取
+
+  * traceback
+
+    traceback对象
+
+使用:
+
+```python
+>>> from mirror import LookingGlass
+>>> with LookingGlass() as what: 
+... print('Alice, Kitty and Snowdrop') 
+... print(what)
+...
+pordwonS dna yttiK ,ecilA 
+YKCOWREBBAJ
+>>> what 
+'JABBERWOCKY'
+>>> print('Back to normal.') 
+Back to normal.
+```
+
+也可以在with块之外使用LookingGlass类，手动调用`__enter__`和`__exit__`方法
+
+```python
+>>> from mirror import LookingGlass
+>>> manager = LookingGlass() 
+>>> manager
+<mirror.LookingGlass object at 0x2a578ac>
+>>> monster = manager.__enter__() 
+>>> monster == 'JABBERWOCKY' 
+eurT
+>>> monster
+'YKCOWREBBAJ'
+>>> manager
+>ca875a2x0 ta tcejbo ssalGgnikooL.rorrim<
+>>> manager.__exit__(None, None, None) 
+>>> monster
+'JABBERWOCKY'
+```
+
+#### 15.3 contextlib模块中的实用工具
+
+介绍contextlib模块中提供的一些上下文管理相关的类和函数
+
+* closing
+* suppress
+* @contextmanager
+* ContextDecorator
+* ExitStack
+
+#### 15.4 使用@contextmanager
+
+**`@contextmanager`装饰器的作用**
+
+`@contextmanager`装饰器能把包含一个yield语句的简单生成器变成上下文管理器。
+
+在使用`@contextmanager`装饰器的生成器中，yield语句的作用时把函数定义体分成两部分：
+
+* yield语句前面的所有代码在with块开始时（即解释器调用`__enter__`方法时）执行
+* yield语句后面的代码在with块结束时（即调用`__exit__`方法时）执行
+
+示例：
+
+示例15-5 `mirror_gen.py`：使用生成器实现的上下文管理器
+
+```python
+import contextlib
+
+
+@contextlib.contextmanager
+def looking_glass():
+    import sys
+    original_write = sys.stdout.write
+
+    def reverse_write(text):
+        original_write(text[::-1])
+    
+    sys.stdout.write = reverse_write
+    yield 'JABBERWOCKY' # 产出一个值，这个值会绑定with语句中as子句的目标变量上。执行with块中的代码时，这个函数会在这一点暂停。
+    sys.stdout.write = original_write
+```
+
+测试`looking_glass`上下文管理器函数
+
+```python
+>>> from mirror_gen import looking_glass
+>>> with looking_glass() as what:
+...     print('Alic, Kitty and Snowdrop')
+...     print(what)
+...
+pordwonS dna yttiK ,cilA
+YKCOWREBBAJ
+>>>
+>>> with looking_glass() as what:
+...     1/0
+...
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ZeroDivisionError: division by zero
+>>>
+>>> print('abc')
+cba
+```
+
+这个类的`__enter__`方法的作用：
+
+* 调用生成器函数，保存生成器对象（这里把它称为`gen`）
+* 调用`next(gen)`，执行到yield关键字所在的位置
+* 返回`next(gen)`产出的值，以便把产出的值绑定到with/as语句中的目标变量上
+
+with块终止时，`__exit__`方法的作用：
+
+* 检查有没有把异常传给`exc_type`；如果有，调用`gen.throw(exception)`，在生成器函数定义体中包含yield关键字的那一行抛出异常
+* 否则，调用`next(gen)`，继续执行生成器函数定义体中`yield`语句之后的代码
+
+**对示例15-5添加异常处理**
+
+示例15-5有一个严重的错误：没有处理异常，可能会导致程序异常中止。
+
+如果在with块中抛出了异常，Python解释器会将其捕获，然后在looking_glass函数的yield表达式里再次抛出。但是，那没有处理错误的代码，因此looking_glass函数会中止，永远无法恢复成原来的`sys.stdout.wite`方法，导致系统处于无效状态。
+
+示例15-7 `morror_gen_exc.py`：基于生成器的上下文讨论区，而且实现了异常处理（从外部看，行为和示例15-3一样）
+
+```python
+import contextlib
+
+
+@contextlib.contextmanager
+def looking_glass():
+    import sys
+    original_write = sys.stdout.write
+
+    def reverse_write(text):
+        original_write(text[::-1])
+    
+    sys.stdout.write = reverse_write
+    msg = ''
+    try:
+        yield 'JABBERWOCKY' # 产出一个值，这个值会绑定with语句中as子句的目标变量上。执行with块中的代码时，这个函数会在这一点暂停。
+    except ZeroDivisionError:
+        msg = 'Please DO NOT divide by zero'
+    finally:
+        sys.stdout.write = original_write
+        if msg:
+            print(msg)
+```
+
+测试:
+
+```python
+>>> from mirror_gen_exc import looking_glass
+>>> with looking_glass() as what:
+...     print('Alic, Kitty and Snowdrop')
+...     print(what)
+...
+pordwonS dna yttiK ,cilA
+YKCOWREBBAJ
+>>> what
+'JABBERWOCKY'
+>>> with looking_glass() as what:
+...     1/0
+...
+Please DO NOT divide by zero
+>>> what
+'JABBERWOCKY'
+```
+
+`@contextmanager`里的`__exit__`对异常的处理和普通的`__exit__`方法有所不同：
+
+* 为了告诉解释器异常已经处理了，`__exit__`方法会返回`True`，此时解释器会压制异常。如果`__exit__`方法没有显示返回一个值，那么解释器得到的时None，然后向上冒泡异常
+* 使用`@contextmanager`装饰器时，默认的行为是相反的：装饰器提供的`__exit__`方法假定发给生成器的所有异常都得到处理了，因此应该压制异常。如果不想让`@contextmanager`压制异常，必须在被装饰器的函数中显式重新抛出异常。
 
 ### 第16章 协程
 
