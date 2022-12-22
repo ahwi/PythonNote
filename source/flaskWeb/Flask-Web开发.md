@@ -1,5 +1,58 @@
 # Flask-Web开发：基于Python的Web应用开发实战
 
+### 前言
+
+#### 1. 如何使用示例代码
+
+示例代码可以在github上获取：`https://github.com/miguelgrinberg/flasky`
+
+使用git来操作：
+
+* 下载示例代码：
+
+	```bash
+	git clone https://github.com/miguelgrinberg/flasky.git
+	```
+
+* 签出指定版本的代码，如：
+
+	```bach
+	git checkout 1a
+	```
+	
+	1a代表一个标签（tag），是项目中某次提交历史的名字。
+
+* 如果修改了源文件，git会阻止你签出其他历史版本，因为者会导致本地修改历史的丢失。签出其他历史版本之前，需要把文件还原到原始状态。使用如下命令：
+
+  ```bash
+  git reset --hard
+  ```
+
+  这个命令会损坏本地修改，所以执行命令前需要保存所有不想丢失的改动。
+
+* 从github上下载修正和改进后的源码用于更新本地仓库。完成这个操作的命令如下：
+
+  ```bash
+  git fetch --all
+  git fetch --tags
+  git reset --hard origin/master
+  ```
+
+  `git fetch`命令用于利用github上的远程仓库更新本地仓库的提交历史和标签，但不会改动真正的源文件，随后执行的`git reset`命令才是用于更新文件的操作（执行`git reset`命令后，本地修改会丢失）。
+
+* 查看程序两个版本之间的区别，如下查看2a和2b两个修订版本之间的区别：
+
+  ```bash
+  git diff 2a 2b
+  ```
+
+  或者可以用github的图像化对比方式：
+
+  ```bash
+  https://github.com/miguelgrinberg/flasky/compare/2a...2b
+  ```
+
+
 ###  第1章 安装
 
 **有两个主要依赖**
@@ -29,6 +82,28 @@
   python -m venv ./venv
   venv/Scripts/activate
   ```
+  
+  如果执行错误，需要安装`virtualenv `
+  
+  ```bash
+  # 安装virtualenv
+  	pip install virtualenv
+  	pip install virtualenvwrapper  # 这是对virtualenv的封装版本，一定要在virtualenv后安装 
+  
+  # 创建虚拟环境
+  	cd E:/python3  # 进入该文夹
+  	virtualenv envname   # 创建一个名字为envname的虚拟环境
+  	dir     # 查看当前目录可以知道一个envname的文件已经被创建
+  
+  # 启动虚拟环境
+  	# 进入虚拟环境文件
+  	cd envname
+  	# 进入相关的启动文件夹
+  	cd Scripts
+  
+  	activate  # 启动虚拟环境
+  	deactivate # 退出虚拟环境
+  ```
 
 ###  第2章 程序的基本结构
 
@@ -45,7 +120,9 @@
   app = Flask(__name__)
   ```
 
-* Flask使用构造函数的name参数决定程序的根目录
+  Flask类的构造函数只有一个必须指定的参数，即程序主模块或包的名字。
+
+* Flask使用构造函数的name参数决定程序的根目录，以便能够找到相对于程序根目录的资源文件位置
 
 #### 2.2 路由和视图函数:
 
@@ -69,8 +146,13 @@
       return '<h1>Hello, %s!</h1>'
   ```
 
+  尖括号的内容就是动态部分，任何能匹配静态部分的URL都会映射到这个路由上。
+
+  调用视图函数时，Flask会将动态部分作为参数传输入函数。
+
 * 动态部分默认使用字符串，可以使用类型定义`/user/<int:id>`
 
+  * 如果指定了类型，路由只会匹配对应的数据类型的URL，如上只会匹配id为int类型的URL
   * 支持的类型：int、float、path(也是字符串)
 
 #### 2.3 启动服务器：
@@ -82,13 +164,11 @@ if __name__ == '__main__':
 
 Flask提供的Web服务器不适合在生成环境中使用。第17章会介绍生产环境Web服务器。
 
-
-
 #### 2.5 请求-响应循环
 
 ##### 2.5.1 程序和请求上下文
 
-flask使用上下文，让视图函数可以访问请求对象和其他对象
+flask使用上下文把某些对象变为全局可访问，让视图函数可以访问请求对象和其他对象。
 
 如:
 
@@ -101,7 +181,7 @@ def index():
     return '<p>Your browser is %s</p>' % user_agent
 ```
 
-在这个视图函数中，我们把request当做全局变量使用，事实上，request不是全局变量，在多线程服务中，Flask使用上下文让特定的变量在一个线程中全局可访问，与此同时却不会干扰其他线程。
+在这个视图函数中，我们把request当做全局变量使用，事实上，request不是全局变量，在多线程服务器中，多个线程同时处理不同客户端发送的不同请求时，每个线程看到的request对象必然不同。在多线程服务中，Flask使用上下文让特定的变量在一个线程中全局可访问，与此同时却不会干扰其他线程。
 
 flask中有两种上下文:
 
@@ -117,7 +197,9 @@ flask中有两种上下文:
 | request     | 请求上下文 | 请求对象，封装了客户端发出的HTTP请求中的内容           |
 | session     | 请求上下文 | 用户会话，用于存储请求之间需要“记住”的值的词典         |
 
-Flask在分发请求之前激活（或推送）程序和请求上下文，请求处理完成后再将其删除
+Flask在分发请求之前激活（或推送）程序和请求上下文，请求处理完成后再将其删除。
+
+程序上下文被推送后，就可以在线程中使用current_app和g变量。类似的，请求上下文被推送后，就可以使用request和session变量。
 
 
 
@@ -136,8 +218,6 @@ RuntimeError: working outside of application context
 'hello'
 >>> app_ctx.pop()
 ```
-
-
 
 ##### 2.5.2 请求调度
 
@@ -158,6 +238,10 @@ Map([<Rule '/' (HEAD, OPTIONS, GET) -> index>,
  <Rule '/user/<name>' (HEAD, OPTIONS, GET) -> user>])
 ```
 
+* `/`和`/static/<name>`路由在程序中使用`app.route`装饰器定义
+* `/static/<filename>`路由是Flask添加的路由器，用于访问静态文件
+* URL映射中的`HEAD`、`Options`、`GET`是请求方法，由路由器进行处理。Flask为每个路由都指定了请求方法，这样不同的请求方法发送到相同的URL上时，会使用不同的视图函数进行处理。
+
 ##### 2.5.3 请求钩子
 
 有时在处理请求之前或之后执行代码会很有用，flask使用请求钩子来实现
@@ -171,20 +255,23 @@ Map([<Rule '/' (HEAD, OPTIONS, GET) -> index>,
 
 在请求钩子函数和视图函数之间共享数据一般使用上下文全局变量 g。
 
+例如，`before_request`处理程序可以从数据库中加载已登陆的用户，并将其保存到`g.user`中。随后调用视图函数时，视图函数再使用`g.user`获取用户。
+
 ##### 2.5.4 响应
 
-HTTP协议需要的不仅仅只有作为请求响应的字符串，还有一个很重要的部分是状态码
+Flask调用视图函数后，会将其返回值作为响应的内容。
 
-如下：返回一个400状态码，表示请求无效
+* HTTP协议需要的不仅仅只有作为请求响应的字符串，还有一个很重要的部分是状态码
 
-```python
-@app.route('/')
-def index():
- return '<h1>Bad Request</h1>', 400
-```
+  如下：返回一个400状态码，表示请求无效
 
-视图函数返回的响应还可接受第三个参数，这是一个由首部（header）组成的字典，可以
-添加到 HTTP 响应中。
+	```python
+	@app.route('/')
+	def index():
+	    return '<h1>Bad Request</h1>', 400
+	```
+	
+	视图函数返回的响应还可接受第三个参数，这是一个由首部（header）组成的字典，可以添加到 HTTP 响应中。
 
 * Flask视图函数还可以返回Response对象
 
@@ -197,9 +284,13 @@ def index():
         return response
     ```
 
+    `make_response()`函数可接受1个、2个、或3个参数（和视图函数的返回值一样），并返回一个Response对象。
+
 * 重定向的特殊响应类型：
 
-  重定向响应可以使用3 个值形式的返回值生成，也可在 Response 对象中设定。不过，由于使用频繁，Flask 提供了 redirect() 辅助函数，用于生成这种响应
+  重定向经常使用302状态码表示，指向地址由`Location`首部提供。
+
+  重定向响应可以使用3 个值形式的返回值生成，也可在 Response 对象中设定。不过，由于使用频繁，Flask 提供了 redirect() 辅助函数，用于生成这种响应。如下所示：
 
   ```python
   from flask import redirect
@@ -226,9 +317,9 @@ def index():
 
 Flask被设计为可扩展形式，如数据库和用户认证
 
-##### 使用Flask-Script支持命令行选项
+##### 扩展举例：使用Flask-Script支持命令行选项
 
-flask支持很多启动设置选项，但只能在脚本中作为参数传给`app.run()`函数，使用`Flask-Script`可以为flask添加一个命令行解析器的扩展。
+flask支持很多启动设置选项，但只能在脚本中作为参数传给`app.run()`函数。这种方式并不十分便利，所以可以使用`Flask-Script`为flask添加一个命令行解析器的扩展。
 
 * 安装：
 
@@ -248,8 +339,6 @@ flask支持很多启动设置选项，但只能在脚本中作为参数传给`ap
 
   为flask开发的扩展都暴露在flask.ext命名空间下，`Flask-Script`输出一个名为Manager的类。该扩展的初始化方法也适用于其他很多扩展：程序实例--(作为参数)-->构造函数-->初始化主类的实例-->在其他扩展中使用。
 
-
-
 ### 第3章 模板
 
 为了方便理解和维护，将视图函数的业务逻辑和表现逻辑分开，将表现逻辑移到模板中。
@@ -258,14 +347,14 @@ flask支持很多启动设置选项，但只能在脚本中作为参数传给`ap
 
 #### 3.1 Jinja2模板引擎
 
-新式最简单的`Jinja2`模板就是一个包含响应文本的文件
+形式最简单的`Jinja2`模板就是一个包含响应文本的文件
 
 如:
 
 `templates/index.html`
 
 ```html
-<h1>Hello, {{name}}!</h1>
+<h1>Hello World!</h1>
 ```
 
 `templates/user.html`
@@ -297,6 +386,7 @@ if __name__ == '__main__':
 
 * 默认情况下，Flask在templates子文件夹中寻找模板
 * Flask提供`render_template`函数把`Jinja2`模板引擎集成到程序中
+* `render_template`函数的第一个参数是模板的文件名，随后的参数都是键值对，表示模板中变量对应的真实值。
 
 ##### 3.1.2 变量
 
@@ -411,6 +501,12 @@ Jinja2提供了多种控制结构，可用来改变模板的渲染流程
   <h1>Hello, World!</h1>
   {% endblock %}
   ```
+  
+  * `extends`指令声明这个模板衍生自`base.html`。
+  * 在`extends`指令之后，基模板的3个块会被重新定义，模板引擎会将其插入适当的位置。
+  * 注意新定义的`head`块，在基模板其内容不是空的，所以使用`super()`获取原来的内容。
+
+
 
 #### 3.2 使用Flask-Bootstrap集成Twitter Bootstrap
 
@@ -675,7 +771,7 @@ def index():
 
   ```python
   app = Flask(__name__)
-  app.config['SECRET_KEY'] = 'hard to guess string
+  app.config['SECRET_KEY'] = 'hard to guess string'
   ```
 
   app.config 字典可用来存储框架、扩展和程序本身的配置变量
@@ -768,8 +864,8 @@ from flask import Flask, render_template, session, redirect, url_for
 def index():
  form = NameForm()
  if form.validate_on_submit():
- session['name'] = form.name.data
- return redirect(url_for('index'))
+ 	session['name'] = form.name.data
+ 	return redirect(url_for('index'))
  return render_template('index.html', form=form, name=session.get('name'))
 ```
 
@@ -1090,20 +1186,20 @@ INFO [alembic.migration] Running upgrade None -> 1bc594146bb5, initial migration
 ```shell
 |-flasky
  |-app/
- |-templates/
- |-static/
- |-main/
- |-__init__.py
- |-errors.py
- |-forms.py
- |-views.py
- |-__init__.py
- |-email.py
- |-models.py
+ 	|-templates/
+ 	|-static/
+ 	|-main/
+ 		|-__init__.py
+ 		|-errors.py
+ 		|-forms.py
+ 		|-views.py
+ 	|-__init__.py
+ 	|-email.py
+ 	|-models.py
  |-migrations/
  |-tests/
- |-__init__.py
- |-test*.py
+ 	|-__init__.py
+ 	|-test*.py
  |-venv/
  |-requirements.txt
  |-config.py
