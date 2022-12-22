@@ -1239,42 +1239,1198 @@ FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协�
 
 **协议是非正式的，没有强制力**，因此如果你知道类的具体使用场景，通常只需要实现一个协议的部分。例如，为了支持迭代，只需实现`__getitem__`方法，没必要提供 `__len__`方法。
 
+#### 10.4 Vector类第2版：可切片的序列
+
+如上述的FrenchDeck所示，**如果能委托给对象的序列属性，支持序列协议特别简单**。
+
+如下所示，把序列协议委托给`self._components`数组
+
+```python
+class Vector:
+    # ...
+    
+    def __len__(self):
+        return len(self._components)
+    
+    def __getitem__(self, index):
+        return self._components[index]
+```
+
+上述的序列协议并不完美，如果Vector实例的切片也是Vector实例，而不是数组，那就比较完美了。
+
+##### 10.4.1 切片原理
+
+**1. 了解`__getitem__`和切片的行为**
+
+```python
+>>> class MySeq:
+...     def __getitem__(self, index):
+...         return index # 直接返回index的值
+...
+>>> s = MySeq()
+>>> s[1] # 单个索引没有什么新奇的
+1
+>>> s[1:4] # 1:4表示法变成了slice(1, 4, None)
+slice(1, 4, None)
+>>> s[1:4:2]
+slice(1, 4, 2) # 表示从1开始，到4结束，步幅为2
+>>> s[1:4:2,9] # 如果[]中有逗号，那么__getitem__收到的是元组
+(slice(1, 4, 2), 9) 
+>>> s[1:4:2, 7:9] # 元组中甚至可以有多个切片对象
+(slice(1, 4, 2), slice(7, 9, None))
+```
+
+**2. 查看slice类的属性**
+
+```python
+>>> slice
+<class 'slice'>
+>>> dir(slice)
+['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'indices', 'start', 'step', 'stop']
+>>>
+```
+
+* slice是内置的类型
+* slice有start、stop和step数据属性，以及indices方法
+
+**3. slice类中的indices属性**
+
+```python
+>>> help(slice.indices)
+Help on method_descriptor:
+
+indices(...)
+    S.indices(len) -> (start, stop, stride)
+
+    Assuming a sequence of length len, calculate the start and stop
+    indices, and the stride length of the extended slice described by
+    S. Out of bounds indices are clipped in a manner consistent with the
+    handling of normal slices.
+```
+
+i**ndices方法会“整顿”元组，把start、stop和stride都变成非负数，而且都落在指定长度序列的边界内。**
+
+示例：假设有个长度为5的序列，例如'ABCDE':
+
+```python
+>>> slice(None, 10, 2).indices(5)
+(0, 5, 2)
+>>> slice(-3, None, None).indices(5)
+(2, 5, 1)
+```
+
+* `'ABCDE'[:10:2]`等同于`'ABCDE'[0:5:2]`
+* `'ABCDE'[-3:]`等同于`'ABCDE'[2:5:1]`
+
+在Vector类中无需使用`slice.indices()`方法，因为收到切片参数时，我们会委托`_components`数组处理。但是，**如果你没有底层序列作为依靠，那么使用这个方法能节省大量时间**。
+
+##### 10.4.2 能处理切片的`__getitem__`方法
+
+示例：实现能正确处理切片的`__getitem__`方法
+
+```python
+    def __len__(self):
+        return len(self._components)
+
+    def __getitem__(self, index):
+        cls = type(self) # 获取实例所属的类（即Vector），供后面使用
+        if isinstance(index, slice): # 如果index参数的值时slice对象，调用类的构造方法，使用_components数组的切片构建一个新的Vector实例
+            return cls(self._components[index])
+        elif isinstance(index, numbers.Integral): 如果index是int或其他整数类型，那就返回_components中相应的元素
+            return self._components[index]
+        else: # 抛出异常
+            msg = '{cls.__name__} indices must be integers'
+            raise TypeError(msg.format(cls=cls))
+```
 
 
 
+#### 10.5 Vector类第3版：动态存取属性
+
+实现功能：通过x、y、z、和t访问Vector的前4个分量，操作如下所示：
+
+```python
+>>> v = Vector(range(10))
+>>> v.x
+0.0
+>>> v.y, v.z, v.t
+(1.0, 2.0, 3.0)
+```
+
+**1. 使用`__getattr`方法实现动态读取**
+
+**`__getattr方法的调用机制`**
+
+属性查找失败后，解释器会调用`__getattr__`方法。简单说，对`my_obj.x`表达式，Python会检查`my_obj`实例有没有名为x的属性；如果没有，到类（`my_obj.__class__`）中查找；如果还没有，顺着继承树继续查找。如果依旧找不到，调用my_obj所示类中定义的`__getattr__`方法，传入self和属性名称的字符串形式（如'x'）。
+
+示例：`vector_V3`的部分代码
+
+```python
+    shortcut_name = 'xyzt'
+    
+    def __getattr__(self, name):
+        cls = type(self)
+        if len(name) == 1:
+            pos = cls.shortcut_name.find(name)
+            if 0 <= pos < len(self._components):
+                return self._components[pos]
+        msg = '{.__name__!r} object has no attribute {!r}'
+        raise AttributeError(msg.format(cls, name))
+```
+
+调用如下所示：
+
+```python
+>>> from vector_v3 import Vector
+>>> v = Vector(range(5))
+>>> v
+Vector([0.0, 1.0, 2.0, 3.0, 4.0])
+>>> v.x
+0.0
+>>> v.x = 10
+>>> v.x
+10
+>>> v
+Vector([0.0, 1.0, 2.0, 3.0, 4.0])
+```
+
+* 不恰当的行为：为v.x赋值没有抛出错误，但是前后矛盾。
+
+* v.x返回10的原因：仅当对象没有指定名称的属性时，Python才会调用`__getitem__`方法，这是一种后备机制。
+
+为了避免这种前后矛盾的现象，需要改写Vector类中设置属性的逻辑
+
+**2. 使用`__setattr__`方法禁止部分属性的赋值**
+
+示例：`vector_v3.py`的部分代码：在Vector类中实现`__setattr__`方法
+
+```python
+    def __setattr__(self, name, value):
+        cls = type(self)
+        if len(name) == 1:
+            if name in cls.shortcut_name:
+                error = 'readonly attribute {attr_name!r}'
+            elif name.islower():
+                error = "can't set attributes 'a' to 'z' in {cls_name!r}"
+            else:
+                error = ''
+            if error:
+                msg = error.format(cls_name=cls.__name__, attr_name=name)
+                raise AttributeError(msg)
+        super().__setattr__(name, value)
+```
+
+多数时候，如果实现了`__getattr__`方法，那么也要定义`__setattr__`方法，以防止对象的行为不一致。
 
 
 
+#### 10.6 Vector类第4版：散列和快速等值测试
+
+本节实现`__hash__`方法，加上现有的`__eq__`方法，会把Vector实例变成可散列的对象。
+
+`__hash__`需要计算各个分量的散列值，像这样：`v[0] ^ v[1] ^ v[2]...`
+
+**1. 使用reduce函数来计算各个分量的散列值**
+
+`functools.reduce()`的原理：它的关键实现是，把一系列值归约成单个值。reduce()函数的第一个参数是接受两个参数的函数，第二个参数是一个可迭代的对象。假如有个接受两个参数的fn函数和一个lst列表。调用reduce(fn, lst)时，fn会应用到第一个元素上，即fn(lst[0], lst[1])，生成第一个结果r1。然后，fn会应用到r1和下一个元素上，即fn(r1, lst[2])，生成第二个结果r2。接着，调用fn(r2, lst[3])，生成r3......直到最后一个元素，返回最后得到的结果rN。
+
+示例：计算聚合异或的3种方式：一种使用for循环，两种使用reduce函数。
+
+```python
+>>> n = 0
+>>> for i in range(1, 6):
+...     n ^= i
+...
+>>> n
+1
+>>> functools.reduce(lambda a, b: a^b, range(6))
+1
+>>> functools.reduce(operator.xor, range(6))
+1
+```
+
+示例：vector_v4.py的部分代码：在vector_v3.py种Vector类的基础上导入两个模块，添加`__hash__`方法：
+
+```python
+from array import array
+import reprlib
+import math
+import functools
+import operator
+
+
+class Vector:
+    typecode = 'd'
+	...
+
+    def __eq__(self, other):
+        return tuple(self) == tuple(other)
+
+    def __hash__(self):
+        hashes = (hash(x) for x in self._components)
+        return functools.reduce(operator.xor, hashes, 0)
+
+```
+
+说明：reduce函数最好提供第三个参数，reduce(function, iterable, initializer)，这样能避免这个异常：TypeError:reduce() of empty sequence with no initial value。如果序列为空，initializer是返回的结果；否则，在归约中使用它作为第一个参数，因此应该使用恒等值。比如，对`+`、`|`和`^`来说，initializer应该是0；而对`*`和`&`来说，应该是1。
+
+**2. `__hash__`方法是一种映射规约计算**
+
+![image-20210228113102790](assets/image-20210228113102790.png)
+
+上述的`__hash__`方法是一种映射归约计算，映射归约：把函数应用到各个元素上，生成一个新序列（映射，map），然后计算聚合值（归约，reduce）
+
+把生成器表达式替换成map方法，映射过程更加明显：
+
+```python
+    def __hash__(self):
+        hashes = map(hash, self._components)
+        return functools.reduce(operator.xor, hashes, 0)
+```
+
+在Python3中，map函数是惰性的，它会创建一个生成器，按需产出结果，因此能节省内存。
+
+**3. 优化`__eq__`方法**
+
+原方法的实现：
+
+```python
+    def __eq__(self, other):
+        return tuple(self) == tuple(other)
+```
+
+存在的问题：不适合有大量分量的情况，该方法需要完整复制两个操作数，构建两个元组。
+
+为了提高比较的效率，`Vector.__eq__`方法在for循环中使用zip函数
+
+```python
+    def __eq__(self, other):
+        if len(self) != len(other):
+            return False
+        for a,b in zip(self, other):
+            if a != b:
+                return False
+        return True
+```
+
+zip函数生成一个由元组构成的生成器，元组中的元素来自参数传入的各个可迭代对象。前面比较长度的测试是有必要的，因为一旦有一个输入耗尽，zip函数会立即停止生成值，而且不发出警告。
+
+**4. 使用zip和all函数简化`Vector.__eq__`方法**
+
+```python
+    def __eq__(self, other):
+        return len(self) != len(other) and all(a == b for a, b in zip(self, other))
+```
+
+#### 10.7 Vector类第5版：格式化
+
+Vector类的`__format__`方法使用球面坐标（也叫超球面坐标），因为Vector类支持n个维度，而超过四维后，球体变成了'超球体'。因此，我们会把自定义的格式后缀由‘p’变成'h'。
+
+例如，对四维空间（len(v) == 4）中的 Vector 对象来说，'h' 代码得到的结果是这样：`<r, Φ1, Φ2, Φ3>`其中，r 是模（abs(v)），余下三个数是角坐标 Φ1、Φ2 和 Φ3。
+
+效果如下：
+
+```python
+>>> format(Vector([-1, -1, -1, -1]), 'h')
+'<2.0, 2.0943951023931957, 2.186276035465284, 3.9269908169872414>'
+>>> format(Vector([2, 2, 2, 2]), '.3eh')
+'<4.000e+00, 1.047e+00, 9.553e-01, 7.854e-01>'
+>>> format(Vector([0, 1, 0, 0]), '0.5fh')
+'<1.00000, 1.57080, 0.00000, 0.00000>'
+```
+
+实现方法：
+
+```python
+    def angle(self, n):
+        r = math.sqrt(sum(x * x for x in self[n:]))
+        a = math.atan2(r, self[n-1])
+        if (n == len(self) - 1) and (self[-1] < 0):
+            return math.pi * 2 - a
+        else:
+            return a
+
+    def angles(self):
+        return (self.angle(n) for n in range(1, len(self)))
+
+    def __format__(self, fmt_spec=''):
+        if fmt_spec.endswith('h'): # 超球面坐标
+            fmt_spec = fmt_spec[:-1]
+            coords = itertools.chain([abs(self)],
+                                        self.angles()) 
+            outer_fmt = '<{}>'
+        else:
+            coords = self
+            outer_fmt = '({})'
+        components = (format(c, fmt_spec) for c in coords)
+        return outer_fmt.format(', '.join(components)) 
+```
 
 
 
+### 第11章 接口：从协议到抽象基类
+
+本章讨论的话题是**接口**，有两种类型的接口：
+
+* 鸭子类型的代表**特征动态协议**
+* 接口更明确、能验证实现是否符合规定的**抽象基类（Abstract Base Class, ABC）**
+
+本章要介绍的内容：
+
+* 鸭子类型的动态本性
+
+* 抽象基类的常见用途：实现接口时作为超类使用
+  * 抽象基类如何检查具体子类是否符合接口定义
+  * 如何使用注册机制声明一个类实现了某个接口，而不进行子类化操作
+  * 如何让抽象基类自动“识别”任何符合接口的类，而不进行子类化或注册
+
+#### 11.1 Python文化中的接口和协议
+
+**接口在动态类型中是怎么运作的呢？**
+
+* Python语言没有interface关键字，而且<font color=red>除了抽象基类，每个类都有接口：类实现或继承的公开属性（方法或数据属性），包括特殊方法</font>，如`__getitem__`或`__add__`
+
+* <font color=red>按照定义，受保护的属性和私有属性不在接口中。</font>不过这两个属性仍能在外部访问，因为“受保护的”属性只是采用命名约定实现的（单个前导下划线）；私有属性也可以轻松地访问到，不过不要违背这些约定，在外部访问这些属性。
+
+* 另一方面，不要觉得公开数据属性放入对象的接口中不妥，因为如果需要，总能实现读值方法和设置方法，把数据属性变成特性，使用obj.attr句法的客户代码不会受到影响。
+
+  如下所示：使用特性实现x和y的读取
+
+  ```python
+  class Vector2d:
+      typecode = 'd'
+      def __init__(self, x, y):
+          self.__x = float(x)
+          self.__y = float(y)
+          
+      @property
+      def x(self):
+          return self.__x
+      
+      @property
+      def y(self):
+          return self.__y
+      
+      def __iter__(self):
+          return (i for i in (self.x, self.y))
+  ```
 
 
 
+接口的补充定义：
+
+* 对象公开方法的子集，让对象在系统中扮演特定的角色。如Python文档中的“文件类对象”或“可迭代对象”，这种说法指的不是特定的类，而是指特定的角色。
+* 接口是实现特定角色的方法集合，这样理解正是Smalltalk程序员所说的协议。
+* 协议与继承没有关系。一个类可能会实现多个接口，从而让实例扮演多个角色。
+* 协议是接口，但不是正式的（只能由文档和约定定义），因此协议不能像正式接口那样施加限制
+* 对Python程序员来说，“X类对象”、“X协议”、“X接口”都是一个意思，如“字节序列对象”、“支持缓冲协议的对象”、“一个符合缓冲接口的对象”指的都是一个意思
+
+#### 11.2 Python喜欢序列
+
+**Python数据模型的哲学是尽量支持基本协议。**
+
+图11-1展示了定义为抽象基类的Sequence正式接口
+
+![image-20210306175056999](assets/image-20210306175056999.png)
+
+示例11-3：
+
+Foo类没有继承`abc.Sequence`，而且只实现了序列协议的一个方法：`__getitem__`(没有实现`__len__`方法)
+
+```python
+>>> class Foo:
+...     def __getitem__(self, pos):
+...         return range(0, 30, 10)[pos]
+...
+>>> f = Foo()
+>>> f[1]
+10
+>>> for i in f: print(i)
+...
+0
+10
+20
+>>> 20 in f
+True
+>>> 15 in f
+False
+```
+
+鉴于序列的重要性，如果没有`__iter__`和`__contains__`方法，Python会调用`__getitem__`方法，设法让迭代和in运算符可用。
+
+**Python中的迭代是鸭子类型的一种极端形式：为了迭代对象，迭代器会尝试调用两个不同的方法。**
 
 
 
+#### 11.3 使用猴子补丁在运行时实现协议
+
+标准库中有个`random.shuffle`函数可以打乱序列，下面举例让原本不支持打乱的`FrenchDeck`类，使用猴子补丁来增加支持：
+
+```python
+import collections
+
+Card = collections.namedtuple('Card', ['rank', 'suit'])
+class FrenchDeck:
+    ranks = [str(n) for n in range(2, 11)] + list('JQKA')
+    suits = 'spades diamonds clubs hearts'.split()
+
+    def __init__(self):
+        self._cards = [Card(rank, suit) for suit in self.suits
+                              for rank in self.ranks]
+
+    def __len__(self):
+        return len(self._cards)
+
+    def __getitem__(self, position):
+        return self._cards[position]
+```
+
+上述`FrenckDeck`不支持`random.shuffle`打乱，下面再控制台中为其添加`__setitem__`的猴子补丁，使其支持该操作。
+
+```python
+>>> def set_card(deck, position, card):
+...     deck._cards[position] = card
+...
+>>> FranchDeck.__setitem__ = set_card
+>>> shuffle(deck)
+>>> deck[:5]
+[Card(rank='3', suit='hearts'), Card(rank='4', suit='diamonds'),  Card(rank='4', suit='clubs'),  Card(rank='7', suit='hearts'),Card(rank='9', suit='spades') ]
+```
+
+这种技术叫**猴子补丁：在运行时修改类或模块，而不改动源码。**猴子补丁很强大，但是打补丁的代码与要打补丁的程序耦合十分紧密，而且往往要处理隐藏和没有文档的部分。
+
+上述示例还**强调了协议是动态的**：`random.shuffle`函数不关心参数的类型，只要那个对象实现了部分可变序列协议即可。即便对象一开始没有所需的方法也没关系，后来再提供也行。
+
+#### 11.4 Alex Martelli的水禽
+
+Alex的文章说明：
+
+* 鸭子类型应该避免使用`isinstancs`、`type(foo) is bar`的来检查对象的类型。
+
+* 白鹅类型指，只要cls是抽象基类，即cls的元类是`abc.ABCMeta`，就可以使用`isinstance(obj, cls)`
+
+* 继承抽象基类很简单，只需要实现所需的方法，这样也能表明开发者的意图。这一意图还能通过注册虚拟子类来实现。
+
+* 使用`isinstance`和`issubclass`测试抽象基类更为人接受。不过，即便是抽象基类，也不能滥用`isinstance`检查，在一连串`if/elif/elif`中使用isinstance做检查，然后根据对象的类型执行不同的操作，通常是不好的做法。此时应该使用多态，即采用一定的方式定义类，让解释器把调用分派给正确的方法，而不使用`if/elif/elif`块硬编码分派逻辑。
+
+下面示例：使用鸭子类型处理单个字符串或由字符串组成的可迭代对象（此时可能想使用isinstance来检查，但是这边推荐鸭子类型）
+
+```python
+try:
+    field_names = field_names.replace(',', '').split()
+except AttributeError:
+    pass
+field_names = tunple(field_names)
+```
+
+#### 11.5 定义抽象基类的子类
+
+示例：把`FranchDeck2`声明为`collections.MutableSequence`的子类
+
+```python
+import collections
+
+Card = collections.namedtuple('Card', ['rank', 'suit'])
+
+class FrenchDeck2(collections.MutableSequence):
+    ranks = [str(n) for n in range(2, 11)] + list('JQKA')
+    suits = 'spades diamonds clubs hearts'.split()
+
+    def __init__(self):
+        self._cards = [Card(rank, suit) for suit in self.suits 
+                                        for rank in self.ranks]
+
+    def __len__(self):
+        return len(self._cards)
+    
+    def __getitem__(self, position):
+        return self._cards[position]
+    
+    def __setitem__(self, position, value):
+        self._cards[position] = value
+    
+    def __delitem__(self, position):
+        del self._cards[position]
+    
+    def insert(self, position, value):
+        self._cards.insert(position, value)
+
+```
+
+导入时（加载并编译frenchdeck2.py模块时），Python不会检查抽象方法的实现，在运行时实例化FrenchDeck2类时才会正在的检查。因此，如果没有正确实现某个抽象方法，Python会抛出TypeError异常，并把错误消息设置为`"Can't instantiate abstract class FrenchDeck2 with abstract methods __delitem__, insert"`。
+
+即便FrenckDeck2类不需要`__delitem__`和insert提供的行为，也要实现，因为MutableSequence抽象基类需要它们。
+
+下图是MutableSequence的继承关系图
+
+![image-20210307111353993](assets/image-20210307111353993.png)
 
 
 
+#### 11.6 标准库中的抽象基类
+* 大多数抽象基类在collecttions.abs模块中定义，并且最常用
+* numbers和io包中也有一些抽象基类
+
+##### 11.6.1 collections.abs模块中的抽象基类
+* 标准库中有两个名为abc的模块，这里说的是collections.abc。为了减少加载时间，python3.4在collections包之外实现这个模块，因此要与collections分开导入
+* 另一个abc模块就是abc，这里定义的是abc.ABC类
+
+python3.4在collections.abc模块中定义了16个抽象基类，简要UML类图如同11-3所示
+
+官方介绍文档：https://docs.python.org/3/library/collections.abc.html#collections-abstract-base-classes
+
+![image-20210308192217766](assets/image-20210308192217766.png)
+
+图中各类的介绍
+
+##### 11.6.2 抽象基类的数字塔
+继collections.abc之后，标准库中最有用的抽象基类包是numbers
+numbers包定义的是“数字塔”（即各个抽象基类的层次结构是线性的），层次结构如下所示：
+
+* Number
+* Complex
+* Real
+* Rational
+* Integral
+
+因此，如果想检查一个数是不是整数，可以使用isinstance(x, numbers.Integral)，这样代码就能接受int、bool(int的子类)，或者外部库使用numbers抽象基类注册的其他类型。
+为了满足检查的需要，可以把兼容的类型注册为numbers.Integal的虚拟子类
+
+#### 11.7 定义并使用一个抽象基类
+
+示例：
+
+定义一个Tombola抽象基类，使其满足如下的使用场景：你要在网站或移动应用中显示随机广告，但是在整个广告清单轮转一遍之前，不重复显示广告。
+Tombola抽象基类有四个方法，其中两个是抽象方法：
+
+* `.locad(...)`：把元素放入容器
+* `.pick()`：从容器中随机拿出一个元素，返回选中的元素
+另外两个是具体方法：
+* `.loaded()`：如果容器中至少有一个元素，返回True
+* `.inspect()`：返回一个有序元组，由容器中的现有元素构成，不会修改容器的内容（内部的顺序不保留）
+
+图11-4 展示了Tombola抽象基类和三个具体实现
+
+示例11-9 Tombola抽象基类的定义
+```python
+import abc
+
+
+class Tombola(abc.ABC):
+
+    @abc.abstractclassmethod
+    def load(self, iterable):
+        """从可迭代对象中添加元素。"""
+
+    @abc.abstractclassmethod
+    def pick(self):
+        """随机删除元素，然后将其返回。
+        
+        如果实例为空， 这个方法应该抛出`LookupError`。
+        """
+
+    def loaded(self):
+        """如果至少有一个元素， 返回`True`， 否者返回`False`。"""
+        return bool(self.inspect())
+    
+    def inspect(self):
+        """返回一个有序组，由当前元素构成。"""
+        items = []
+        while True:
+            try:
+                items.append(self.pick())
+            except LookupError:
+                break
+        self.load(items)
+        return tuple(sorted(items))
+```
+
+* 抽象方法可以有实现代码。即便实现了，子类也必须覆盖抽象方法，但是在子类中可以使用super()函数调用抽象方法，为它添加功能，而不是从头开始实现。
+
+* `self.pick()`抛出`LookupError`这一事实也是接口的一部分，但是在Python中没办法声明，只能在文档中说明
+
+* 选择使用`LookupError`异常的原因：在Python的异常层次关系中，它与`IndexError`和`KeyError`有关，这两个是实现`Tombola`所用的数据结构最有可能抛出的异常。据此，实现代码空弄会抛出`LookupError`、`IndexError`和`KeyError`异常。异常的部分层次结构如示例11-10所示：
+
+  ![image-20210308202134092](assets/image-20210308202134092.png)
+
+  * 我们在 `Tombola.inspect` 方法中处理的是 `LookupError` 异常。
+  * `IndexError`是 `LookupError`的子类，尝试从序列中获取索引超过最后位置的元素时抛出。
+  * 使用不存在的键从映射中获取元素时，抛出`KeyError`异常。
+
+测试抽象基类对子类的检查：尝试使用一个有缺陷的实现来糊弄Tombola
+```python
+>>> from tombola import Tombola
+>>> class Fake(Tombola):
+...     def pick(self):
+...         return 13
+...
+>>> Fake
+<class '__main__.Fake'>
+>>> f = Fake()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+TypeError: Can't instantiate abstract class Fake with abstract methods load
+>>>
+```
+实例化Fake时抛出了TypeError。
+
+##### 11.7.1 抽象基类句法详解
+
+**声明抽象基类的方法：**
+
+* 声明抽象基类最简单的方式是继承`abc.ABC`或其他抽象基类。
+
+* `abc.ABC`是Python3.4新增的类，因此如果那你使用的是旧版python，必须在class语句中使用`metaclass=`关键字，把值设为`abc.ABCMeta`（不是`abc.ABC`）。如下所示：
+
+  ```python
+  class Tombola(metaclass=abc.ABCMeta)
+      # ...
+  ```
+
+* `metaclass=`关键字参数是Python3引入的，在Python2中必须使用`__metaclass__`类属性：
+
+  ```python
+  class Tombola(object):
+      __metaclass__ = abc.ABCMeta
+  ```
+
+除了`@abstractmethod`之外，abc模块还定义了`@abstractclassmethod`、`@abstractstaticmethod`和`@abstractproperty`三个装饰器。然而，后三个装饰器从Python 3.3起废弃了，因为装饰器可以在`@abstractmethod`上堆叠，那三个显得多余了。例如，声明抽象类方法的推荐方式是：
+
+```python
+class MyABC(abc.ABC):
+    @classmethod
+    @abc.abstractmethod
+    def an_abstract_classmethod(cls, ...):
+        pass
+```
+
+在函数上堆叠装饰器的顺序通常很重要，与其他方法描述符一起使用时，`@abstractmethod()`应该放在最里层。
+
+##### 11.7.2 定义Tombola抽象基类的子类
+
+示例 11-12 `bingo.py`： `BingoCage`是`Tombola`的具体子类
+
+```python
+import random
+
+from tombola import Tombola
+
+
+class BingoCage(Tombola):
+
+    def __init__(self, items):
+        self._randomizer = random.SystemRandom()
+        self._items = []
+        self.load(items)
+
+    def load(self, items):
+        self._items.extend(items)
+        self._randomizer.shuffle(self._items)
+    
+    def pick(self):
+        try:
+            return self._items.pop()
+        except IndexError:
+            raise LookupError('pick from empty BingoCage')
+    
+    def __call__(self):
+        self.pick()
+```
+
+示例11-13是`Tombola`接口的另一实现，`LotteryBlower`打乱“数字球”后没有取出最后一个，而是取出一个随机位置上的球。
+
+示例11-13 `lotoo.py`：`LotteryBlower`是Tombola的具体子类，覆盖了继承的inspect和loaded的方法
+
+```python
+import random
+
+from tombola import Tombola
+
+
+class LotteryBlower(Tombola):
+    def __init__(self, iterable):
+        self._balls = list(iterable)
+
+    def load(self, iterable):
+        self._balls.extend(iterable)
+    
+    def pick(self):
+        try:
+            position = random.randrange(len(self._balls))
+        except ValueError:
+            raise LookupError('pick from empty LotteryBlower')
+        return self._balls.pop(position)
+    
+    def loaded(self):
+        return bool(self._balls)
+
+    def inspect(self):
+        return tuple(sorted(self._balls))
+```
+
+##### 11.7.3 Tombola的虚拟子类
+
+**白鹅类型的一个基本特性（也是值得用水禽来命名的原因 ）：即便不继承，也有办法把一个类注册为抽象基类的虚拟子类。**
+
+**注册虚拟子类**
+
+* 注册虚拟子类的方式：在抽象基类上调用register方法。
+* 注册的类会变成抽象基类的虚拟子类，而且issubclass和isinstance等函数都能识别
+* 虚拟子类不会继承注册的抽象基类，而且任何时候都不会检查它是否符合抽象基类的接口，即便在实例化时也不会检查。为了避免运行时错误，虚拟子类要实现所需的全部方法。
+* register方法通常作为普通的函数调用，不过也可以作为装饰器使用。
+
+示例 11-14实现一个虚拟子类`TomboList`类，这是Tombola的一个虚拟子类，如图11-5所示：
+
+![image-20210308221042888](assets/image-20210308221042888.png)
+
+示例11-14 tombolist.py：TomboList是Tombola的虚拟子类
+
+```python
+from random import randrange
+
+from tombola import Tombola
+
+
+@Tombola.register
+class Tombola(list):
+
+    def pick(self):
+        if self:
+            position = randrange(len(self))
+            return self.pop(position)
+        else:
+            raise LookupError('pop from empty TomboList')
+    
+    load = list.extend  # Tombolist.load与list.extend一样 
+
+    def loaded(self): # loaded方法不能采用load方法的那种方式，因为list类型没有实现loaded方法所需的__bool__方法。而内置的bool函数不需要__bool__方法，因为它还可以使用__len__方法
+        return bool(self) 
+    
+    def inspect(self):
+        return tuple(sorted(self)):
+
+# Tombola.register
+```
+
+注册之后，可以使用`issubclass`和`isinstance`函数判断`TomboList`是不是Tombola的子类：
+
+```python
+>>> from tombola import Tombola
+>>> from tombolist import TomboList
+>>> issubclass(TomboList, Tombola)
+True
+>>> t = TomboList(range(100))
+>>> isinstance(t, Tombola)
+True
+```
+
+类的继承关系在一个特殊的类属性中指定`__mro__`，即方法解析顺序（Method Resolution Order）。这个属性的作用很简单，按顺序列出类及其超类，Python会按照这个顺序搜索方法。
+
+查看TomboList类的`__mro__`属性，你会发现它只列出了“真实的”超类，即list和object：
+
+```python
+>>> TomboList.__mro__
+(<class 'tombolist.TomboList'>, <class 'list'>, <class 'object'>)
+>>>
+```
+
+**`Tombolist.__mro__`中没有Tombola，因此Tombolist没有从Tombola中继承任何方法。**
+
+#### 11.8 Tombola子类的测试方法
+
+略
+
+#### 11.9 Python使用register的方式
+
+在Python3.3之前的版本不能把register当作装饰器使用，必须在定义类之后向普通函数那样调用。
+
+把register当作函数使用更为常见，例如，在`collections.abc`模块的源码中，是这样把内置类型tuple、str、range和memoryview注册为Sequence的虚拟子类的：
+
+```python
+Sequence.register(tuple)
+Sequence.register(str)
+Sequence.register(range)
+Sequence.register(meoryview)
+```
+
+#### 11.10 鹅的行为有可能像鸭子
+
+**利用`__subclasshook__`方法，即便不注册，抽象基类也能把一个类识别为虚拟子类。**
+
+```python
+>>> class Struggle:
+...     def __len__(self): return 23
+...
+>>> from collections import abc
+>>> isinstance(Struggle(), abc.Sized)
+True
+>>> issubclass(Struggle, abc.Sized)
+True
+```
+
+经`issubclass`函数确认（`isinstance`函数也会得出相同的结论），`Struggle`是`abc.Sized`的子类，这是因为`abc.Sized`实现了一个特殊的类方法，名为`__subclasshook__`。
+
+**Size类的源码**
+
+示例11-17 Size类的源码
+
+```python
+class Size(metaclass=ABCMeta):
+    
+    __slots__ = ()
+    
+    @abstractmethod
+    def __len__(self):
+        return 0
+    
+    @abstractmethod
+    def __subclasshook__(cls, C):
+        if cls is Sized:
+            if any("__len__" in B.__dict__ for B in C.__mro__):
+                return True
+        return NotImplemented
+```
+
+`__subclasshook__`在白鹅类型中添加了一些鸭子类型的踪迹。我们可以使用抽象基类定义正式接口，可以始终使用`isinstance`检查，也可以完全使用不相关的类，只要实现特定的方法即可（或者做些事情让`__subclasshook`信服）。
+
+### 第12章 继承的优缺点
+
+本章探讨继承和子类化
+
+* 子类化内置类型的缺点
+* 多重继承和方法解析顺序
+
+#### 12.1 子类化内置类型很麻烦
+
+* 在Python 2.2之前，内置类型（如list或dict）不能子类化。在Python 2.2之后，内置类型就可以子类化了。
+
+* 内置类型（使用C语言编写）不会调用用户定义的类覆盖的特殊方法。
+
+  例如：dict的子类覆盖的`__getitem_()`方法不会被内置类型的`get()`方法调用
+
+示例 12-1 内置类型dict的`__init__`和`__update__`方法会忽略我们覆盖的`__setitem__`方法
+
+```python
+>>> class DoppelDict(dict):
+...     def __setitem__(self, key, value):
+...         super().__setitem__(key, [value] * 2) # DoppelDict.__setitem__方法会重复存入的值（只是为了提供易于观察的效果）。它把职责委托给超类
+...
+>>> dd = DoppelDict(one=1) # 继承自dict的__init__方法显然忽略了我们覆盖的__setitem__方法：'one'的值没有重复
+>>> dd
+{'one': 1}
+>>> dd['two'] = 2 # []运算符会调用我们覆盖的__setitem__方法，按预期那样工作：'two'对应的是两个重复的值，即[2, 2]。
+>>> dd
+{'one': 1, 'two': [2, 2]}
+>>> dd.update(three=3)  # 继承自dict的update方法也不适用我们覆盖的__setitem__方法：'three'的值没有重复
+>>> dd
+{'one': 1, 'two': [2, 2], 'three': 3}
+```
+
+**原生类型的这种行为违背了面向对象编程的一个基本原则：始终应该从实例（self）所属的类开始搜索方法，即使在超类实现的类中调用也是如此。**
+
+在这种糟糕的局面中，`__missing__`方法却能按预期方式工作，不过这只是特例。
+
+不止在实例内部的调用有这个问题，**内置类型的方法调用的其他类的方法（如果被覆盖了），也不会被调用**，如实例12-2所示
+
+示例 12-2 dict.update方法会忽略`AnswerDict.__getitem__`方法
+
+```python
+>>> class AnswerDict(dict):
+...     def __getitem__(self, key): # 不管传入什么键，AnswerDict.__getitem__方法始终返回42
+...         return 42
+...
+>>> ad = AnswerDict(a='foo') # ad是AnswerDict的实例，以('a', 'foo')键值对初始化
+>>> ad['a'] # ad['a']返回42，这与预期相符
+42
+>>> d = {} 
+>>> d.update(ad) # d是dict的实例，使用ad中的值更新d
+>>> d['a'] # dict.update方法忽略了AnswerDict.__getitem__方法
+'foo'
+>>> d
+{'a': 'foo'}
+>>>
+```
+
+**直接子类化内置类型容易出错，应该继承collections模块**
+
+直接子类化内置类型（如dict、list或str）容易出错，因为内置类型的方法通常会忽略用户覆盖的方法。不要子类化内置类型，用户自定义的类应该继承collections模块中的类，如UserDict、UserList和UserString，这些类做了特殊设计，因此易于扩展。
+
+本节所述的问题只发生在C语言实现的内置类型内部的方法委托上，而且只影响直接继承内置类型的用户，如果子类化使用Python编写的类就不会受此影响。
+
+#### 12.2 多重继承和方法解析顺序
+
+“菱形问题”：任何实现多重继承的语言都要处理潜在的命名冲突，这种冲突由不相关的祖先类实现同名方法引起。这种冲突称为“菱形问题”，如图12-1和示例12-4所示：
+
+![image-20210309213643519](assets/image-20210309213643519.png)
+
+```python
+class A:
+    def ping(self):
+        print('ping:', self)
+    
+
+class B(A):
+    def pong(self):
+        print('pong:', self)
+
+
+class C(A):
+    def pong(self):
+        print('PONG:', self)
+
+
+class D(B, C):
+    def ping(self):
+        super().ping()
+        print('post-ping', self)
+    
+    def pingpong(self):
+        self.ping()
+        super().ping()
+        self.pong()
+        super().pong()
+        C.pong(self)
+```
+
+示例 12-5 在D实例上调用pong方法的两种方式
+
+```python
+>>> from diamond import *
+>>> d = D()
+>>> d.pong() # 直接调用d.pong()运行的是B类中的版本
+pong: <diamond.D object at 0x0000028DE25BBDA0>
+>>> C.pong(d) # 超类中的方法都可以直接调用，此时要把实例作为显示参数传入
+PONG: <diamond.D object at 0x0000028DE25BBDA0>
+```
+
+**方法解析顺序**
+
+类都有一个名为`__mro__`的属性，它的值是一个元组，按照方法解析顺序列出各个超类，从当前类一直向上，直到object类。而且方法解析顺序不仅考虑继承图，还考虑子类声明中列出超类的顺序。
+
+D类的`__mro__`属性如下：
+
+```python
+>>> D.__mro__
+(<class 'diamond.D'>, <class 'diamond.B'>, <class 'diamond.C'>, <class 'diamond.A'>, <class 'object'>)
+```
+
+**调用超类的方法的方式**
+
+* 使用内置的`super()`函数
+
+* 也可以绕过方法解析顺序，直接调用某个类的方法
+
+  如下所示：
+
+  ```python
+  def ping(self):
+      A.ping(self) 
+      print('post-ping:', self)
+  ```
+
+  直接在类上调用实例方法时，必须显示传入self参数，因为这样访问的是未绑定的方法（unbound method）。
+
+**打印方法解析顺序的函数**
+
+```python
+>>> bool.__mro__
+(<class 'bool'>, <class 'int'>, <class 'object'>)
+>>> def print_mro(cls):
+...     print(', '.join(c.__name__ for c in cls.__mro__))
+...
+>>> print_mro(bool)
+bool, int, object
+```
+
+#### 12.3 多重继承的真实应用
+
+在标准库中，GUI工具包Tkinter把多重继承用到了极致。
+
+图12-12展示了Tkinter中Text小组件类的继承关系
+
+![image-20210309225255447](assets/image-20210309225255447.png)
+
+图12-3 列出了tkinter基包中的全部小组件类
+
+![image-20210309225357790](assets/image-20210309225357790.png)
 
 
 
+#### 12.4 处理多重继承
+
+使用多重继承容易得出令人费解和脆弱的设计，下面是避免把类图搅乱的一些建议：
+
+**Tkinter好的、不好的和令人厌恶的方面**
+
+#### 12.5 一个现代示例：Django通用视图中的混入
+
+与Tkinter相比，Django基于类的视图API是多重继承更好的示例。
 
 
 
+### 第13章 正确重载运算符
+
+这章重点介绍：
+
+* Python如何处理中缀运算符中不同类型的操作数
+* 使用鸭子类型或显示类型检查处理不同类型的操作数
+*  中缀运算符如何表明自己无法处理操作数
+*  众多比较运算符（如`>`、`<=`, '=='）的特殊行为
+*  增量赋值运算符（如`+=`）的默认处理方式和重载操作
+
+#### 13.1 运算符重载基础
+运算符重载会被滥用，因此Python添加了一些限制，做好了灵活性、可用性和安全性方面的平衡：
+
+* 不能重载内置类型的操作符
+* 不能新建运算符，只能重载现有的
+*  有些操作符不能重载，如is, and, or和not（但是位运算符|, &和~可以重载）
+
+#### 13.2 一元运算符
+
+**三个一元运算符及其特殊方法：**
+
+* - （`__neg__`）
+    一元取负运算符。如果x是-2，那么-x == 2
+* （`__pos__`）
+  一元取正运算符。通常，x == +x，但也有一些例外。
++ ~ （`__invert__`）
+    对整数按位取反，定义~x == -(x+1)。如果x是2，那么~x == -3
+
+在Python语言参考手册中也把内置的`abs()`函数列为一元操作符，它对应的特殊方法是`__abs__`
+
+**把一元运算符`-`、`+`添加到Vector类中**
+示例13-1 `vector_v6.py`：把一元运算符-和+添加到示例10-16中
+```python
+    def __abs__(self):
+        return math.sqrt(sum(x * x for x in self))
+
+	def __neg__(self):
+		return Vector(-x for x in self)
+	def __pos__(self):
+ 		return Vector(self)
+```
+
+**不实现`__invert__`方法，程序调用的错误信息**
+我们不打算实现`__invert__`方法，因此如果用户在Vector实例上尝试计算~v,Python会抛出TypeError，而且输出明确的错误消息，“bad operand type for unary ~:'Vector'”
+
+**x != +x 的特殊场景**
+大多数情况下x == +x，下面例举的两个特殊场景下，x != +x
+场景1：
+
+与`decimal.Decimal`类有关。如果x是Decimal实例，在算术运算符的上下文中创建，任何在不同的上下文中计算+x，如果精度变了，那么x != +x
+
+详细见P309的示例
+
+场景2：
+
+`collections.counter`类也会发生x != +x的情况，详细见P310
+
+#### 13.3 重载向量加法运算符`+`
+
+#### 
+
+**1. 为Vector添加`__add__`方法以支持加法运算符`+`**
+
+示例 13-4 `Vector.__add__`方法，第一版
 
 
 
+**2. 添加`__radd__`方法，以支持左操作数不是Vector之外的对象的情况**
+
+为了支持涉及不同类型的运算符，Python为中缀运算符特殊方法提供了特殊的分派机制。对表达式`a + b`来说，解释器会执行以下几步操作：
+
+* 如果a有`__add__`方法，而且返回值不是`NotImplemented`，调用`a.__add__(b)`，然后返回结果
+* 如果a没有`__add__`方法，或者调用`__add__`方法返回`NotImplemented`，检查b有没有`__radd__`方法，如果有，而且没有返回`NotImplemented`，调用`b.__radd__(a)`，然后返回结果
+* 如果b没有`__radd__`方法，或者调用`__radd__`方法返回`NotImplemented`，抛出`TypeError`，并在错误消息中指明操作数类型不支持
+
+注（`NotImplemented`和`NotImplementedError`是不一样的，前者是特殊的单例值，后者是一种异常）
+
+下面是解释器的操作流程图：
+
+![image-20210310203508739](assets/image-20210310203508739.png)
+
+示例 13-7 `Vector.__add__`和`__radd__`方法
+
+略
+
+**3. 增加对不支持类型的处理**
+
+为了遵守鸭子类型的精神，我们不能测试other操作数的类型，或者它的元素的类型。我们要捕获异常，然后返回`NotImplemented`。如果解释器还未反转操作数，那么它将尝试去做。如果反向方法返回`NotImplemented`，那么Python会抛出`TypeError`，并返回一个标准的错误消息，例如“unsupported operand type(s) for +: Vector and str”
+
+示例 13-10 `vector_v6.py`：+运算符方法，添加到vector_v5.py（见示例10-16）中
+
+```python
+略
+```
+
+#### 13.4 重载标量乘法运算符`*`
+
+Vector的积有两种
+
+* 标量积
+* 点积
+
+这里实现的是标量积
+
+**1. 实现最简单的`__mul__`和`__rmul___`方法**
+
+```python
+# 在Vector类中定义
+
+def __mul_(self, scalar):
+    return Vector(n * scalar for n in self)
+
+def __rmul__(self, scalar):
+    return self * scalar
+```
+
+上述方法在提供不兼容的操作数时会出问题。
+
+**2. 使用白鹅类型来检查不兼容的操作数**
+
+```python
+# 在Vector类中定义
+
+def __mul_(self, scalar):
+    if isinstance(scalar, numbers.Real):
+        return Vecotr(n * scalar for n in self)
+    else:
+    	return NotImplemented
+
+def __rmul__(self, scalar):
+    return self * scalar
+```
 
 
 
+**3. 我们讲解了编写`+`和`*`中缀运算符最常用的模式。 对表13-1中列出的所有运算符都适用**
 
+![image-20210310210519973](assets/image-20210310210519973.png)
 
+#### 13.5 众多比较运算符
 
+**1. 众多比较运算符和前文运算符的区别**
 
+Python解释器对众多比较运算符（==、!=、>、<、>=、<=）的处理与前文类似，不过在两个方面有重大区别：
 
+* 正向和方向调用使用的是同一系列方法。这方面的规划如表13-2所示。例如，对==来说，正向和反向调用都是`__eq__`方法，只是把参数对调了；而正向的`__gt__`方法调用的是方向的`__lt__`方法，并把参数对调
+* 对`==`和`!=`来说，如果反向调用失败，Python会比较对象的ID，而不抛出TypeError。
 
+表13-2：众多比较运算符：正向方法返回`NotImplemented`的话，调用反向方法
+
+![image-20210310214614377](assets/image-20210310214614377.png)
+
+**2. 改进`vector.__eq__`方法的行为**
+
+略
+
+#### 13.6 增量赋值运算符
+
+* 增量运算符不会修改不可变目标，而是新建实例，然后重新绑定
+* 如果一个类没有实现表13-1列出的就地运算符，增量赋值运算符只是语法糖：a += b的作用与a = a + b完全一样。对不可变类型来说，这是预期的行为，而且，如果定义了`__add__`方法的话，不用编写额外的代码，+=就能使用。
+* 如果实现了就地运算符方法，例如`__iadd__`，计算a += b的结果时会调用就地运算符方法。这种运算符的名称表明，它们会就地修改左操作数，而不会创建新对象作为结果。
+* 对不可变类型来说，一定不能实现就地特殊方法。
+* 对序列类型来说，`+`通常要求两个操作数属于同一类型，而`+=`的右操作数往往可以是任何可迭代对象
 
 ## 第五部分 流畅控制
 
@@ -1290,7 +2446,38 @@ FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协�
   * 迭代器用于从集合中取出元素
   * 生成器用于“凭空”生成元素
 
-**iter函数**
+#### 14.1 Sentence类第1版：单词序列 
+
+实现一个Sentence类，以此打开探索可迭代对象的旅程。
+
+第1版要实现序列协议，这个类的对象可以迭代，因为所有序列都可以迭代。
+
+示例14-1 `sentence.py`：把句子划分为单词序列
+
+```python
+import re
+import reprlib
+
+RE_WORD = re.compile('\w+')
+
+
+class Sentence:
+    
+    def __init__(self, text):
+        self.text = text
+        self.words = RE_WORD.findall(text)
+    
+    def __getitem__(self, index):
+        return self.words[index]
+    
+    def __len__(self):
+        return len(self.words)
+    
+    def __repr__(self):
+        return 'Sentence(%s)' % reprlib.repr(self.text)
+```
+
+**序列可以迭代的原因：iter函数**
 
 解释器需要迭代对象x时，会自动调用iter(x)
 
@@ -1315,7 +2502,7 @@ FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协�
 
 * 直接使用`iter(x)`，如果对象不可迭代会抛`TypeError:'C' object is not iterable`的异常
 
-序列可以迭代，因为它实现了`__getitem__`方法
+任何Python序列可以迭代，因为它们都实现了`__getitem__`方法。（其实标准库的序列也都实现了`__iter__`方法）
 
 #### 14.2 可迭代对象与迭代器的对比
 
@@ -1323,6 +2510,37 @@ FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协�
 
 * python从可迭代的对象中获取迭代器
 * 使用`iter`内置函数可以获取迭代器的对象
+
+示例：
+
+使用for循环迭代一个字符串。字符串'ABC'是可迭代的对象，背后是有迭代器的，只不过我们看不到：
+
+```python
+>>> s = 'ABC'
+>>> for char in s:
+...     print(char)
+...
+A
+B
+C
+```
+
+如果没有for语句，不得不使用while循环模拟：
+
+```python
+>>> s = 'ABC'
+>>> it = iter(s) # 使用可迭代的对象构建迭代器it
+>>> while True:
+...     try:
+...         print(next(it)) # 不在再迭代器上调用next函数，获取下一个字符
+...     except StopIteration: # 如果没有字符了，迭代器会抛出StopIteration异常
+...         del it  #释放对it的引用，即废弃迭代器对象
+...         break   #退出循环
+...
+A
+B
+C
+```
 
 **标准的迭代器接口有两个方法：**
 
@@ -1332,7 +2550,7 @@ FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协�
 
 * `__iter__`:
 
-  返回self，以便在应该使用可迭代对象（这里的可迭代对象应该指迭代器对象，跟可迭代的对象不是同一个东西）的地方使用迭代器，例如在for循环中
+  返回self，以便在应该使用可迭代对象（这里的可迭代对象应该指迭代器对象本身，跟可迭代的对象不是同一个东西）的地方使用迭代器，例如在for循环中
 
 **迭代器接口的类关系：**
 
@@ -1340,7 +2558,7 @@ FrenchDeck类能充分利用Python的很多功能，因为它实现了序列协�
 
 * `Iterable`和`Iterator`的关系
 
-  ![1596853787233](assets/1596853787233.png)
+  ![image-20210313105849814](assets/image-20210313105849814.png)
 
 **`Iterator`源码 ：**
 
@@ -1361,7 +2579,7 @@ class Iterator(Iterable):
         return NotImplemented
 ```
 
-检查对象x是否为迭代器最好的方式是调用`isinstance(x, abc.Iterator)`，得益于`Iterator.__subclasshook__`方法，即使对象x所属的类不是`Iterator`类的真是子类或虚拟子类，也能这样检查
+检查对象x是否为迭代器最好的方式是调用`isinstance(x, abc.Iterator)`，得益于`Iterator.__subclasshook__`方法，即使对象x所属的类不是`Iterator`类的真实子类或虚拟子类，也能这样检查。
 
 **迭代器的定义：**
 
@@ -1430,8 +2648,8 @@ if __name__ == '__main__':
 * 混淆了二者，比如想把Sentence变成迭代器
 
 * 两者的区别：
-  * 迭代器对象有个`__iter__`方法，每次都实例化一个新的迭代器
-  * 迭代器要实现`__next__`方法，返回单个元素，实现`__iter__`方法，返回迭代器本身
+  * 可迭代的对象有个`__iter__`方法，每次都实例化一个新的迭代器
+  * 迭代器要实现`__next__`方法，返回单个元素，还要实现`__iter__`方法，返回迭代器本身
 
 * 在可迭代的对象加入`__next__`方法是一种糟糕的想法，这是一种常见的反模式，违反了迭代器模式的用途
 
@@ -1500,6 +2718,58 @@ def __iter__(self):
 * 生成器表达式是创建生成器的简洁语法，无需先定义函数再调用
 * 生成器函数可以使用多个语句实现复杂的逻辑，也可以作为协程使用
 
+#### 14.8 另一个示例：等差数列生成器
+
+本节用不同的方法实现：用于生成不同类型的有穷等差数列的生成器
+
+示例 14-10 `ArithmeticProgression`类
+
+```python
+class ArithmeticProgression:
+    def __init__(self, begin, step, end=None):
+        self.begin = begin
+        self.step = step
+        self.end = end
+    
+    def __iter__(self):
+        result = type(self.begin + self.step)(self.begin)
+        forever = self.end is None
+        index = 0
+        while forever or result < self.end:
+            yield result
+            index += 1
+            result = self.begin + self.step * index
+```
+
+示例 14-12 `aritprog_gen`生成器函数
+
+```python
+def aritprog_gen(begin, step, end=None):
+    result = type(begin, step)(begin)
+    forver = end is None
+    index = 0
+    while forver or result < end:
+        yield result
+        index += 1
+        result = begin + step * index
+```
+
+示例 14-13 `aritprog_v3.py`：与前面的aritprog_gen函数作用相同
+
+```python
+import itertools
+
+
+def aritprog_gen(begin, step, end=None):
+    first = type(begin, step)(begin)
+    ap_gen = itertools.count(first, step)
+    if end is not None:
+        ap_gen = itertools.takewhile(lambda n: n < end, ap_gen)
+    return ap_gen
+```
+
+三个版本功能一样，不过可以对比一下如何用更简洁的方式来实现。
+
 #### 14.9 标准库中的生成器函数
 
 略
@@ -1537,6 +2807,11 @@ def __iter__(self):
   # out: ["A","B","C",0,1,2]
   ```
 
+#### 14.11 可迭代的归约函数
+
+表14-6中的函数都接受一个可迭代的对象，然后返回单个结果。
+
+表略
 
 #### 14.12 深入分析iter函数
 
@@ -1555,17 +2830,41 @@ def __iter__(self):
       print(roll)
   ```
 
-
-
 #### 14.13案例分析：在数据库转换工具
 
-略
+本节介绍了一个数据库转换工具的实现方式，以此来说明如何使用生成器函数解耦读写逻辑。
+
+#### 14.4 把生成器当作协程
+
+Python 2.5实现了`.send()`方法
+
+`.send()`方法的作用：
+
+* 与`.next()`方法一样，使生成器前进到下一个yield语句
+* `.send()`方法允许在客户代码和生成器之间交换数据。即：把`.send()`方法的参数，会成为生成器函数定义体中对应的yield表达式的值。
 
 ### 第15章 上下文管理器和else块
 
+本章介绍：
+
+* with语句和上下文管理器
+* for、while和try语句的else子句
+
 #### 15.1 先做这个，再做那个：if语句之外的else块
 
-for while 语句后面的else子句
+else 子句的行为如下：
+
+* for
+
+  仅当for循环运行完毕时（即for循环没有被break语句中止）才允许else块
+
+* while
+
+  仅当while循环因为条件为假值而退出时（即while循环没有被break语句中止）才允许else块
+
+* try
+
+  仅当try块中没有异常抛出时才运行else块。
 
 #### 15.2 上下文管理器和with块
 
@@ -1573,24 +2872,35 @@ for while 语句后面的else子句
 
 * with语句的目的是简化try/finally模式
 * 上下文管理器协议包含`__enter__`和`__exit__`两个方法。
-  * `with`语句开始运行时，会再上下文管理器对象上调用`__enter__`方法
-  * `with`语句运行结束后，会在上下文管理器对象上调用`__exit__`方法，以次扮演finally子句的角色
+  * `with`语句开始运行时，会在上下文管理器对象上调用`__enter__`方法
+  * `with`语句运行结束后，会在上下文管理器对象上调用`__exit__`方法，以此扮演finally子句的角色
 
-例程1：with的使用方法：
+示例 15-1 演示把文件对象当作上下文管理器使用
 
 ```python
-with open("mirror.py") as fp:
-    src = fp.read(60)
+>>> with open("mirror.py") as fp:
+...    src = fp.read(60)
+...
+>>> len(src)
+60
+>>> fp
+<_io.TextIOWrapper name='mirror.py' mode='r' encoding='UTF-8'>
+>>> fp.closed, fp.encoding
+(True, 'UTF-8')
+>>> fp.read(60)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ValueError: I/O operation on closed file.
 ```
 
 注：执行with后面的表达式得到的结果是上下文管理器对象，不过，把值绑定到目标变量上（as子句）是在上下文管理器对象上调用`__enter__`方法的结果
 
 as子句是可选的
 
-例程2：上下文管理器类LookingClass上下文管理器的代码
+示例 15-3：lookingGlass.py`：LookingGlass上下文管理器类的代码
 
 ```python
-class LookingClass:
+class LookingGlass:
     def __enter__(self):
         import sys
         self.original_write = sys.stdout.write
@@ -1605,10 +2915,191 @@ class LookingClass:
         sys.stdout.write = self.original_write
         if exc_type is ZeroDivisionError:
             print('Please DO NOT divide by zero!')
-            return True
+            return True # # 如果有异常发生，__exit__方法True之外的值，with块中的异常会向上冒泡
 ```
 
+* 解释器调用`__enter__`方法时，除了隐式的self之外，不会传入任何参数。
 
+* 传给`__exit__`方法的三个参数：
+
+  * exc_type
+
+    异常类（例如ZeroDivisionError）
+
+  * exc_value
+
+    异常实例。有时会有参数传递给异常构造方法，例如错误消息，这些参数可以使用`exc_value.args`获取
+
+  * traceback
+
+    traceback对象
+
+使用:
+
+```python
+>>> from mirror import LookingGlass
+>>> with LookingGlass() as what: 
+... print('Alice, Kitty and Snowdrop') 
+... print(what)
+...
+pordwonS dna yttiK ,ecilA 
+YKCOWREBBAJ
+>>> what 
+'JABBERWOCKY'
+>>> print('Back to normal.') 
+Back to normal.
+```
+
+也可以在with块之外使用LookingGlass类，手动调用`__enter__`和`__exit__`方法
+
+```python
+>>> from mirror import LookingGlass
+>>> manager = LookingGlass() 
+>>> manager
+<mirror.LookingGlass object at 0x2a578ac>
+>>> monster = manager.__enter__() 
+>>> monster == 'JABBERWOCKY' 
+eurT
+>>> monster
+'YKCOWREBBAJ'
+>>> manager
+>ca875a2x0 ta tcejbo ssalGgnikooL.rorrim<
+>>> manager.__exit__(None, None, None) 
+>>> monster
+'JABBERWOCKY'
+```
+
+#### 15.3 contextlib模块中的实用工具
+
+介绍contextlib模块中提供的一些上下文管理相关的类和函数
+
+* closing
+* suppress
+* @contextmanager
+* ContextDecorator
+* ExitStack
+
+#### 15.4 使用@contextmanager
+
+**`@contextmanager`装饰器的作用**
+
+`@contextmanager`装饰器能把包含一个yield语句的简单生成器变成上下文管理器。
+
+在使用`@contextmanager`装饰器的生成器中，yield语句的作用时把函数定义体分成两部分：
+
+* yield语句前面的所有代码在with块开始时（即解释器调用`__enter__`方法时）执行
+* yield语句后面的代码在with块结束时（即调用`__exit__`方法时）执行
+
+示例：
+
+示例15-5 `mirror_gen.py`：使用生成器实现的上下文管理器
+
+```python
+import contextlib
+
+
+@contextlib.contextmanager
+def looking_glass():
+    import sys
+    original_write = sys.stdout.write
+
+    def reverse_write(text):
+        original_write(text[::-1])
+    
+    sys.stdout.write = reverse_write
+    yield 'JABBERWOCKY' # 产出一个值，这个值会绑定with语句中as子句的目标变量上。执行with块中的代码时，这个函数会在这一点暂停。
+    sys.stdout.write = original_write
+```
+
+测试`looking_glass`上下文管理器函数
+
+```python
+>>> from mirror_gen import looking_glass
+>>> with looking_glass() as what:
+...     print('Alic, Kitty and Snowdrop')
+...     print(what)
+...
+pordwonS dna yttiK ,cilA
+YKCOWREBBAJ
+>>>
+>>> with looking_glass() as what:
+...     1/0
+...
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ZeroDivisionError: division by zero
+>>>
+>>> print('abc')
+cba
+```
+
+这个类的`__enter__`方法的作用：
+
+* 调用生成器函数，保存生成器对象（这里把它称为`gen`）
+* 调用`next(gen)`，执行到yield关键字所在的位置
+* 返回`next(gen)`产出的值，以便把产出的值绑定到with/as语句中的目标变量上
+
+with块终止时，`__exit__`方法的作用：
+
+* 检查有没有把异常传给`exc_type`；如果有，调用`gen.throw(exception)`，在生成器函数定义体中包含yield关键字的那一行抛出异常
+* 否则，调用`next(gen)`，继续执行生成器函数定义体中`yield`语句之后的代码
+
+**对示例15-5添加异常处理**
+
+示例15-5有一个严重的错误：没有处理异常，可能会导致程序异常中止。
+
+如果在with块中抛出了异常，Python解释器会将其捕获，然后在looking_glass函数的yield表达式里再次抛出。但是，那没有处理错误的代码，因此looking_glass函数会中止，永远无法恢复成原来的`sys.stdout.wite`方法，导致系统处于无效状态。
+
+示例15-7 `morror_gen_exc.py`：基于生成器的上下文讨论区，而且实现了异常处理（从外部看，行为和示例15-3一样）
+
+```python
+import contextlib
+
+
+@contextlib.contextmanager
+def looking_glass():
+    import sys
+    original_write = sys.stdout.write
+
+    def reverse_write(text):
+        original_write(text[::-1])
+    
+    sys.stdout.write = reverse_write
+    msg = ''
+    try:
+        yield 'JABBERWOCKY' # 产出一个值，这个值会绑定with语句中as子句的目标变量上。执行with块中的代码时，这个函数会在这一点暂停。
+    except ZeroDivisionError:
+        msg = 'Please DO NOT divide by zero'
+    finally:
+        sys.stdout.write = original_write
+        if msg:
+            print(msg)
+```
+
+测试:
+
+```python
+>>> from mirror_gen_exc import looking_glass
+>>> with looking_glass() as what:
+...     print('Alic, Kitty and Snowdrop')
+...     print(what)
+...
+pordwonS dna yttiK ,cilA
+YKCOWREBBAJ
+>>> what
+'JABBERWOCKY'
+>>> with looking_glass() as what:
+...     1/0
+...
+Please DO NOT divide by zero
+>>> what
+'JABBERWOCKY'
+```
+
+`@contextmanager`里的`__exit__`对异常的处理和普通的`__exit__`方法有所不同：
+
+* 为了告诉解释器异常已经处理了，`__exit__`方法会返回`True`，此时解释器会压制异常。如果`__exit__`方法没有显示返回一个值，那么解释器得到的时None，然后向上冒泡异常
+* 使用`@contextmanager`装饰器时，默认的行为是相反的：装饰器提供的`__exit__`方法假定发给生成器的所有异常都得到处理了，因此应该压制异常。如果不想让`@contextmanager`压制异常，必须在被装饰器的函数中显式重新抛出异常。
 
 ### 第16章 协程
 
