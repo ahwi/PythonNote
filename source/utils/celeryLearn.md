@@ -189,3 +189,101 @@ False
 暂时略过
 
 https://docs.celeryq.dev/en/stable/getting-started/first-steps-with-celery.html#id12
+
+## User Guide
+
+### Application
+
+Celery在使用之前必须初始化实例，该实例我们称作`application`（或`app`）
+
+该应用程序是线程安全的，因此具有不同配置、组件和任务的多个Celery应用程序可以在同一进程空间中共存。
+
+创建一个app实例:
+
+```python
+>>> from celery import Celery
+>>> app = Celery()
+>>> app
+<Celery __main__ at 0x20f2f325088>
+```
+
+最后一行的信息包括：
+
+* app类的名字：`Celery`
+* 当前main模块的名字：`__main__`
+* 实例的内存地址：`0x20f2f325088`
+
+#### Main Name
+
+当你发送一个任务消息给celery，该消息不会包含任何源代码，只包含了你想执行的任务的名称。每个woker都维护一个`task registry（任务注册表）`，包含任务名称到实际函数的映射。
+
+当你定义一个task时，该任务会被加入到`local register(本地注册表)`上：
+
+```python
+>>> from celery import Celery
+>>> app = Celery()
+>>> @app.task
+... def add(x, y):
+...     return x + y
+...
+>>> add
+<@task: __main__.add of __main__ at 0x20f2f325088>
+>>> add.name
+'__main__.add'
+>>> app.tasks['__main__.add']
+<@task: __main__.add of __main__ at 0x20f2f325088>
+>>> quit()
+```
+
+这里又看到了`__main__`；每当Celery无法检测到函数所属的模块时，它会使用主模块名称来生成任务名称的开头。
+
+This is only a problem in a limited set of use cases:
+
+1. If the module that the task is defined in is run as a program.
+2. If the application is created in the Python shell (REPL).
+
+例如，使用`app.worker_main()`启动tasks模块中的worker：
+
+`tasks.py`
+
+```python
+from celery import Celery
+app = Celery()
+
+@app.task
+def add(x, y): return x + y
+
+if __name__ == "__main__":
+    app.worker_main()
+```
+
+当执行此模块时，tasks的命名会以`__main__`开头，但是当模块被其他程序导入时，该tasks的命名会以`tasks`（模块的真实名称）为开头：
+
+```python
+Type "help", "copyright", "credits" or "license" for more information.
+>>> from tasks import add
+>>> add.name
+'tasks.add'
+>>> quit()
+```
+
+你也可以给它指定一个名称：
+
+```python
+>>> from celery import Celery
+>>> app = Celery('testTasks')
+>>> app.main
+'testTasks'
+
+>>> @app.task
+... def add(x, y):
+...     return x + y
+
+>>> add.name
+'testTasks.add'
+```
+
+> 详情参考：
+>
+>  Names: https://docs.celeryq.dev/en/stable/userguide/tasks.html#task-name
+
