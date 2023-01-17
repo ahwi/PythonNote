@@ -54,6 +54,7 @@ storage:
 
 ```
 C:\mongodb\bin\mongod.exe --config "C:\mongodb\mongod.cfg" --install
+C:\mongodb\bin\mongod.exe --config "C:\Program Files\MongoDB\Server\4.0\mongod.cfg" --install
 ```
 
 **启动/关闭 /移除 MongoDB服务：**
@@ -931,6 +932,18 @@ db.createUser(
        第一个查询耗费的时间仍然介于 2 秒到 3 秒之间，但是第二个查询只用了不到 1/5 秒
 
        在实际的应用程序中，{"sortKey" : 1， "queryCriteria" : 1} 索引通常是很有用的，因为大多数应用程序在一次查询中只需要得到查询结果最前面的少数结 果，而不是所有可能的结果
+
+
+
+## 相关操作
+
+### 数据导出
+
+参考`https://www.jianshu.com/p/667fd4fd6ff7`
+
+#### 数据表的导出
+
+
 
 
 

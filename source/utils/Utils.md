@@ -638,3 +638,19 @@ if __name__=='__main__':
 
   第一个函数会报错，后改写成第二个使用的方式就正常了，可能原因是变量的引用导致的
 
+## python程序在windows后台运行
+
+参考：`https://www.jianshu.com/p/a4ed789b1a34`
+
+* 将Python脚本打包成exe可执行文件
+
+* cmd执行
+
+  ```bash
+  sc create MyPythonServer binPath= d:\dir\MyScript.exe
+  
+  sc start MyPythonServer
+  ```
+
+注：没有实际操作过，不确定实际效果。
+

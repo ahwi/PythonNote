@@ -737,3 +737,305 @@ print("fib(4) is %r" % result)
   *** Publishers will be blocked until this alarm clears ***
   **********************************************************
   ```
+
+## 集群的配置
+
+### RabbitMQ实战指南中的配置
+
+假设有三台物理主机，均已正确安装了RabbitMQ，且主机名分别为node1、node2和node3。
+
+* 第一步：配置各个节点的hosts文件，让各个节点都能互相识别对方的存在。
+
+  ```txt
+  vim /etc/hosts
+  
+  添加IP地址与节点名称的映射关系：
+  192.168.0.2 node1
+  192.168.0.3 node2
+  192.168.0.4 node3
+  ```
+
+* 第二步：编辑RabbitMQ的cookie文件，以确保各个节点的cookie文件使用同一个值。
+
+  ```txt
+  可以读取node1节点的cookie值，然后将其复制到node2和node3节点中
+  
+  cookie文件默认路径为
+  /var/lib/rabbitmq/.erlang.cookie
+  或
+  $HOME/.erlang.cookie
+  ```
+
+* 第三步：配置集群。配置集群有三种方式：
+
+  * 通过`rabbitmqctl`工具配置（这里主要讲解该方式，也是最常用的方式）
+  * 通过`rabbitmq.config`配置文件配置
+  * 通过`rabbitmq-autocluster`插件配置
+
+  步骤：
+
+  * 首先启动node1、node2和node3这3个节点的RabbitMQ服务
+
+    ```bash
+    [root@nodel ~]# rabbitmq-server -detached
+    [root@node2 ~]# rabbitmq-server -detached
+    [root@node3 ~]# rabbitmq-server -detached 
+    ```
+
+    这样，这3个节点目前都是以独立节点存在的单个集群。通过`rabbitmqctl cluster_status`命令来查看各个节点的状态：
+
+    ```bash
+    [root@node l ~]# rabbitmqctl cluster_status
+    Cluster status of node rabbit@nodel
+    [{nodes, [{disc , [rabbit@nodel] }] },
+    {running_nodes, [rabbit@nodel] },
+    {cluster name , < ” rabbit@nodel”>},
+    {partitions, []} ,
+    {alarms, [{rabbit@nodel , [] }] }]
+    
+    [root@node2 ~]# rabbitmqctl cluster_status
+    Cluster status of node rabbit@node2 
+    [{nodes, [{disc , [rabbit@node2]}]} ,
+    {running nodes , [rabbit@node2] },
+    {cluster name , < ” rabbit@node2 ”>},
+    {partitions, []} ,
+    {alarms, [ { rabbit@node2 , [] } ] } ]
+    
+    [root@node3 ~]# rabbitmqctl cluster status
+    Cluster status of node rabb t@node3
+    [{nodes, [{disc , [rabbit@node3]}]} ,
+    {runn ng nodes , [rabb t@node3] },
+    {cluster ame rabbit@node3 》｝
+    {partitions, []} ,
+    {alarms, [{rabbit@node3 , [] }] }]
+    ```
+
+  * 将3个节点组成一个集群
+
+    需要以node1节点为基准，将node2和node3节点加入node1节点的集群中。（这3个节点是平等的，如果想调换彼此的加入顺序也可以）
+
+    * 首先将node2节点加入node1节点的集群中，需要执行如下4个命令步骤：
+
+      ```bash
+      [root@node2 ~]# rabbitmqctl stop_app
+      Stopping rabbit application on node rabbit@node2
+      [root@node2 ~]# rabbitmqctl reset
+      Resetting node rabb t@node2
+      [root@node2 ~]# rabbitmqctl join_cluster rabbit@nodel
+      Clustering node rabbit@node2 with rabbit@nodel
+      [root@node2 ~ J # rabbitmqctl start_app
+      Starting node rabbit@node2 
+      ```
+
+      此时，node1节点和node2节点便处于同一个集群中，在两个节点上执行`rabbitmqctl cluster_status`命令可以看到同样的输出：
+
+      ```bash
+      [{nodes, [ {d sc [rabbit@nodel rabbit@node2]} J l ,
+      {runn ng nodes , [rabb t@nodel rabbit@node2]}
+      {cluster name, <<"rabbit@node1">>},
+      {partit ons []} ,
+      {alarms, [ { rabbit@nodel , [] } , {rabbi t@node2 , [] } ] } ] 
+      ```
+
+    * 最后将node3节点也降入到node1节点所在的集群中，这3个节点便组成了一个完整的集群。可以在任意一个节点中查看集群的状态
+
+      ```bash
+      [{nodes , [{disc , [rabbit@node1 rabbit@node2 rabbit@node3] l l} ,
+      {running nodes, [rabbit@node1 , rabbit@node2 , rabbit@node3] },
+      {cluster name , <<rabbit@node1>>},
+      {partitions, []} ,
+      {alarms, [ { rabbit@node1, [] } , {rabbit@node2 , [ J } , {rabbit@node3, [] } ] } ] 
+      ```
+
+* 可以在节点上执行`rabbitmqctl stop_app`命令来关闭节点
+
+  例如关闭node2节点，可以看到如下信息
+
+  ```bash
+  [{nodes, [{disc , [rabbit@node1,rabbit@node2 , rabbit@node3] }] },
+  {running_nodes, [rabbit@node1 ,rabbit@node3] },
+  {cluster name , << ” rabbit@node 1 ”>>},
+  {partitions, []),
+  {alarms, [{rabbit@node1, []) , {rabbit@node3 , [] )] )]
+  ```
+
+* 如果关闭了集群中的所有节点，则需要确保在启动的时候，最后关闭的那个节点是第一个启动的。如果第一个启动的不是最后关闭的节点，那么这个节点会等待最后关闭的节点启动。新版的RabbitMQ有重试机制，默认重试10次30秒以等待最后关闭的节点启动。
+
+
+
+### 视频（编程不良人）的搭建方法
+
+配置集群
+
+```bash
+# 0.集群规划
+	node1: 10.15.0.3 mq1 master 主节点
+	node1: 10.15.0.4 mq2 repl1  副本节点
+	node1: 10.15.0.5 mq3 repl2  副本节点
+# 1. 克隆三台己取主机名和ip映射
+	vim /etc/hosts加入:
+		10.15.0.3 mq1
+		10.15.0.4 mq2
+		10.15.0.5 mq3
+# 2. 三个机器安装rabbimtq,并同步cookie文件：
+	/var/lib/rabbitmq/.erlang.cookie
+# 3. 查看cookie是否一致
+	cat /var/lib/rabbitmq/.erlang.cookie
+# 4. 后台启动rabbitmq所有节点执行如下命令：
+	rabbitmq-server -detached
+# 5. 在node2和node3执行加入集群命令：
+	1. 关闭		rabbitmqctl stop_app
+	2. 加入集群	   rabbitmqctl join_cluster rabbit@mq1
+	3. 启动服务	   rabbitmqctl start_app
+# 6. 查看集群状态，在任意节点执行：
+	1. rabbitmqctl cluster_status
+# 7. 集群搭建成功的日志 
+	
+```
+
+配置镜像队列：
+
+```bash
+# 0. 策略说明
+	rabbitmqctl set_policy [-p <vhost>] [--priority <priority>] [--apply-to <apply-to>] <name> <pattern> <definition>
+	-p vhost: 可选参数，针对指定vhost下的queue进行设置
+	Name: policy的名称
+	Pattern: queue的匹配模式（正则表达式）
+	Definition: 镜像定义，包括三个部分ha-mode, ha-params, ha-sync-mode
+				ha-mode: 指明镜像队列的模式，有效值为 all/exactly/nodes
+						 all: 表示在集群中所有的节点上进行镜像
+						 exactly: 表示在指定个数的节点上进行镜像，节点的个数由ha-params指定
+						 nodes: 表示在指定的节点上进行镜像，节点名称通过ha-params指定
+				ha-params: ha-mode模式需要用到的参数
+				ha-sync-mode: 队列中进行消息的同步方式，有效值为automatic和manual
+				priority: 可选参数，policy的优先级
+# 1. 查看当前策略
+	rabbitmqctl list_policies
+# 2. 添加策略
+	rabbitmqctl set_policy ha-all '^hello' '{"ha-mode":"all", "ha-sync-mode":"automatic"}'
+	说明：策略正则表达式为"^" 表示所有匹配所有队列名称 ^hello:匹配hello开头队列
+
+# 3. 删除策略
+	rabbitmqctl clear_policy ha-all '^hello' '{"ha-mode":"all", "ha-sync-mode":"automatic"}'
+```
+
+### 总结
+
+* 非镜像队列：
+
+  * 在哪个节点上创建的队列，队列就属于该节点。
+  * 消费者可以通过其他节点访问队列上的数据，生产者也可以通过其他节点生产消息到该队列。
+  * 但是如果队列所属节点挂掉，该队列便不可使用
+
+* 镜像队列：
+
+  * 在某个节点上创建一个镜像队列，即使节点挂掉，在其他节点正常的情况下，该队列还是能正常使用。
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
